@@ -1,3 +1,3 @@
-# Shell Basics
+# Shell Fields
 
-_A collection of basic shell scripts that are either useful on its own (in interactive sessions), or offer generic functionality for higher-level scripts._
+_A collection of tools that work with fields and records in text files, like specialized AWK scripts._
