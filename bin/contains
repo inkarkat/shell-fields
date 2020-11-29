@@ -1,8 +1,0 @@
-#!/bin/bash
-
-needle=$1; shift
-for elem
-do
-    [ "$needle" = "$elem" ] && exit 0
-done
-exit 1

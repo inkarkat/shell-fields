@@ -1,3 +1,0 @@
-#!/bin/sh
-
-printf '%s %s\n' "$(date '+%d-%b-%Y_%T.%N')" "$*"
