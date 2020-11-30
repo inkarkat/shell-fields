@@ -23,7 +23,9 @@ printLongUsage()
     cat <<HELPDESCRIPTION
 Add a field with AWK-EXPR after every field N (-N counted from behind), counting
 as they originally existed. Non-existing fields at the end are created; field 0
-means appending at the front; negative field numbers are ignored.
+means appending at the front; negative field numbers are ignored. Application happens
+in argument order from left to right; when multiple expressions target the same
+field, the first expression wins; following expressions are discarded.
 HELPDESCRIPTION
     echo
     printShortUsage "$1"
