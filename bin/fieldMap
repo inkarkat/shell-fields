@@ -21,7 +21,9 @@ printLongUsage()
     # This is the long "man page" when launched with the help argument.
     # It is printed to stdout to allow paging with 'more'.
     cat <<HELPDESCRIPTION
-Transform a field N (-N counted from behind) with AWK-EXPR.
+Transform a field N (-N counted from behind) with AWK-EXPR. Application happens
+in argument order from left to right; when multiple expressions target the same
+field, each is applied once.
 HELPDESCRIPTION
     echo
     printShortUsage "$1"
@@ -61,8 +63,8 @@ do
 	-i?*|--in-place=*)	isInPlace=t; inPlaceExtension="${1#-i}"; inPlaceExtension="${inPlaceExtension#--in-place=}"; shift;;
 	?(-)+([0-9]))		fields+=("$1")
 				case "$1" in
-				    -*)	expressionCode+=("if (fieldNr == NF - ${1#-} + 1) return $2");;
-				    *)	expressionCode+=("if (fieldNr == $1) return $2");;
+				    -*)	expressionCode+=("if (fieldNr == NF - ${1#-} + 1 && --fieldNrSequence == 0) return $2");;
+				    *)	expressionCode+=("if (fieldNr == $1 && --fieldNrSequence == 0) return $2");;
 				esac
 				shift; shift
 				;;
@@ -85,7 +87,7 @@ IFS=$'\n'
 exec "${awkCall[@]}" "${awkArgs[@]}" \
     -v "fieldList=${fields[*]//\\/\\\\}" \
 '
-function evaluateExpression(fieldNr)
+function evaluateExpression(fieldNr, fieldNrSequence)
 {
 '"${expressionCode[*]}"'
     printf "ASSERT: Expression for field %d did not match.", fieldNr > "/dev/stderr"
@@ -122,10 +124,11 @@ NR == 1 {
     }
 }
 {
+    delete fieldNrSequences
     for (n = 1; n <= N; ++n) {
 	fieldNr = getFieldNr(fields[n])
 	if (fieldNr >= 1) {
-	    $fieldNr = evaluateExpression(fieldNr)
+	    $fieldNr = evaluateExpression(fieldNr, ++fieldNrSequences[fieldNr])
 	}
     }
 

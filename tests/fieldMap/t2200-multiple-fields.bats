@@ -36,26 +36,26 @@ bzz	fox		4
 eof	fox		1" ]
 }
 
-@test "concatenating X, Y, Z all after the same second field uses X three times" {
+@test "concatenating X, Y, Z all after the same second field uses each in sequence" {
     run fieldMap -F $'\t' 2 '$fieldNr "X"' 2 '$fieldNr "Y"' 2 '$fieldNr "Z"'  "${BATS_TEST_DIRNAME}/tabbed.txt"
 
     [ $status -eq 0 ]
-    [ "$output" = "foo	firstXXX	100	A Here
-bar	no4XXX	201
-	XXX		
-bzz	XXX		last
-	XXX
-eof	XXX" ]
+    [ "$output" = "foo	firstXYZ	100	A Here
+bar	no4XYZ	201
+	XYZ		
+bzz	XYZ		last
+	XYZ
+eof	XYZ" ]
 }
 
-@test "concatenating X, Z both after the same second field and Y after the second-to-last field ignores Z and prefers X over Y in case of overlap" {
+@test "concatenating X, Z both after the same second field and Y after the second-to-last field uses each in sequence" {
     run fieldMap -F $'\t' 2 '$fieldNr "X"' -2 '$fieldNr "Y"' 2 '$fieldNr "Z"'  "${BATS_TEST_DIRNAME}/tabbed.txt"
 
     [ $status -eq 0 ]
-    [ "$output" = "foo	firstXX	100Y	A Here
-bar	no4XXX	201
-	XX	Y	
-bzz	XX	Y	last
-Y	XX
-eofY	XX" ]
+    [ "$output" = "foo	firstXZ	100Y	A Here
+bar	no4XYZ	201
+	XZ	Y	
+bzz	XZ	Y	last
+Y	XZ
+eofY	XZ" ]
 }
