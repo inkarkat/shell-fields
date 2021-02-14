@@ -4,7 +4,7 @@ printShortUsage()
 {
     # Note: short followed by long option; if the user knows the short one, she can
     # skim the long one.
-    printf 'Usage: cat FILE [...] | %q %s\n' "$(basename "$1")" '[-F|--field-separator FS] [-n|--field-num N] -v|--value VAL LIST [...] [[-v|--value VAL] LIST ...]'
+    printf 'Usage: cat FILE [...] | %q %s\n' "$(basename "$1")" '[-F|--field-separator FS] [-u|--unbuffered] [-n|--field-num N] -v|--value VAL LIST [...] [[-v|--value VAL] LIST ...]'
     echo
     printf 'Usage: %q %s\n' "$(basename "$1")" '-i|--input FILESPEC [...] [-i[SUFFIX]|--in-place[=SUFFIX]] [-?|-h|--help]'
 }
@@ -28,6 +28,8 @@ HELPDESCRIPTION
     echo
     printShortUsage "$1"
     cat <<HELPTEXT
+    --field-separator|-F FS Use FS as the input field separator (as with AWK).
+    --unbuffered|-u	    Immediately output each read line.
     --field-num|-n N	    Use a fixed number N of fields for addressing fields
 			    from behind (instead of taking the maximum number
 			    encountered so far). When a particular line has more
@@ -48,6 +50,7 @@ HELPTEXT
     printf 'free -h | %q %s | column -t\n' "$(basename "$1")" "-v 0B 5 6 7"
 }
 
+isBuffered=t
 fieldNum=
 typeset -a awkCall=(awk)
 typeset -a awkArgs=()
@@ -64,6 +67,8 @@ do
 	--input|-i)	shift; awkFiles+=("$1"); shift;;
 	--field-separator|-F)
 			shift; awkArgs=(-F "$1"); shift;;
+	--unbuffered|-u)
+			shift; isBuffered=;;
 	-i|--in-place)	isInPlace=t; shift;;
 	-i?*|--in-place=*)
 			isInPlace=t; inPlaceExtension="${1#-i}"; inPlaceExtension="${inPlaceExtension#--in-place=}"; shift;;
@@ -93,6 +98,7 @@ fi
 
 IFS=$'\n'
 exec "${awkCall[@]}" "${awkArgs[@]}" \
+    -v "isBuffered=$isBuffered" \
     -v "fieldNum=$fieldNum" \
     -v "fieldList=${fields[*]//\\/\\\\}" \
     -v "valueList=${values[*]//\\/\\\\}" \
@@ -180,5 +186,6 @@ NR == 1 {
 
     if (NF > 0) $1 = $1	# Re-render with OFS even if nothing got defaulted, to have consistent field separators.
     print
+    if (! isBuffered) fflush()
 }
 ' "${awkFiles[@]}"
