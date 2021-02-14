@@ -5,7 +5,7 @@ printShortUsage()
 {
     # Note: short followed by long option; if the user knows the short one, she can
     # skim the long one.
-    printf 'Usage: cat FILE [...] | %q %s\n' "$(basename "$1")" '[-F|--field-separator FS] [-]N AWK-EXPR [...]'
+    printf 'Usage: cat FILE [...] | %q %s\n' "$(basename "$1")" '[-F|--field-separator FS] [-u|--unbuffered] [-]N AWK-EXPR [...]'
     echo
     printf 'Usage: %q %s\n' "$(basename "$1")" '... [-i[SUFFIX]|--in-place[=SUFFIX]] [-]N AWK-EXPR [...] [--] [FILE ...] [-?|-h|--help]'
 }
@@ -33,6 +33,7 @@ HELPDESCRIPTION
 			    '"foo"', '++\$fieldNr' (fieldNr refers to N), or
 			    '\$1 "(" length(\$1) ")"')
     --field-separator|-F FS Use FS as the input field separator (as with AWK).
+    --unbuffered|-u	    Immediately output each read line.
     --in-place[=SUFFIX]|-i[SUFFIX]
 			    Edit FILE(s) in place (makes backup if SUFFIX
 			    supplied).
@@ -48,6 +49,7 @@ HELPTEXT
 }
 
 
+isBuffered=t
 typeset -a awkCall=(awk)
 typeset -a awkArgs=()
 typeset -a fields=()
@@ -59,6 +61,7 @@ do
     case "$1" in
 	--help|-h|-\?)		shift; printLongUsage "$0"; exit 0;;
 	--field-separator|-F)	awkArgs+=("$1" "$2"); shift; shift;;
+	--unbuffered|-u)	shift; isBuffered=;;
 	-i|--in-place)		isInPlace=t; shift;;
 	-i?*|--in-place=*)	isInPlace=t; inPlaceExtension="${1#-i}"; inPlaceExtension="${inPlaceExtension#--in-place=}"; shift;;
 	?(-)+([0-9]))		fields+=("$1")
@@ -85,6 +88,7 @@ fi
 
 IFS=$'\n'
 exec "${awkCall[@]}" "${awkArgs[@]}" \
+    -v "isBuffered=$isBuffered" \
     -v "fieldList=${fields[*]//\\/\\\\}" \
 '
 function evaluateExpression(fieldNr, fieldNrSequence)
@@ -133,5 +137,6 @@ NR == 1 {
     }
 
     print
+    if (! isBuffered) fflush()
 }
 ' "$@"
