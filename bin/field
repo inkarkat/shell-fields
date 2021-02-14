@@ -6,12 +6,12 @@ printUsage()
     cat <<HELPTEXT
 Print selected field(s) N (-N counted from behind) from stdin, separated by SEP (or the original FS).
 HELPTEXT
-    printf 'Usage: cat FILE [...] | %q %s\n' "$(basename "$1")" '[-F|--field-separator FS] [-]N|SEP [...]'
+    printf 'Usage: cat FILE [...] | %q %s\n' "$(basename "$1")" '[-F|--field-separator FS] [-u|--unbuffered] [-]N|SEP [...]'
     printf 'Usage: %q %s\n' "$(basename "$1")" '-i|--input FILESPEC [...] [-]N|SEP [...] [-?|-h|--help]'
     cat <<HELPTEXT
 Print everything but passed field(s) N (-N counted from behind) from stdin.
 HELPTEXT
-    printf 'Usage: cat FILE [...] | %q %s\n' "$(basename "$1")" '[-F|--field-separator FS] -v|--remove [-]N [...]'
+    printf 'Usage: cat FILE [...] | %q %s\n' "$(basename "$1")" '[-F|--field-separator FS] [-u|--unbuffered] -v|--remove [-]N [...]'
     printf 'Usage: %q %s\n' "$(basename "$1")" '-i|--input FILESPEC [...] -v|--remove [-]N [...] [-?|-h|--help]'
 }
 fieldNumberError()
@@ -22,6 +22,7 @@ fieldNumberError()
     exit 2
 }
 
+isBuffered=t
 typeset -a fsArgs=()
 typeset -a awkArgs=()
 isRemoveFields=
@@ -32,6 +33,7 @@ do
 	--input|-i)		shift; awkArgs+=("$1"); shift;;
 	--remove|-v)		shift; isRemoveFields=t;;
 	--field-separator|-F)	shift; fsArgs=(-F "$1"); shift;;
+	--unbuffered|-u)	shift; isBuffered=;;
 	--)			shift; break;;
 	-+([0-9]))		break;;
 	-*)			{ echo "ERROR: Unknown option \"$1\"!"; echo; printUsage "$0"; } >&2; exit 2;;
@@ -53,7 +55,9 @@ NR == 1 {
 '
 
 if [ "$isRemoveFields" ]; then
-    exec awk "${fsArgs[@]}" -v nrs="$*" '
+    exec awk "${fsArgs[@]}" \
+	-v "isBuffered=$isBuffered" \
+	-v nrs="$*" '
 BEGIN {
     split(nrs, numbers, " ")
     for (n in numbers) {
@@ -79,6 +83,7 @@ BEGIN {
 	}
     }
     printf "%s", ORS
+    if (! isBuffered) fflush()
 }
 ' "${awkArgs[@]}"
 else
@@ -107,12 +112,17 @@ else
     done
     [ "$hasFieldNumber" ] || fieldNumberError
 
-    exec awk "${fsArgs[@]}" '
+    exec awk "${fsArgs[@]}" \
+	-v "isBuffered=$isBuffered" \
+'
 function fieldFromEnd(n)
 {
     return (n < NF ? $(NF - n + 1) : "")
 }
 '"
 $outputSeparatorDetermination
-{ print$selectors }" "${awkArgs[@]}"
+{
+    print$selectors
+    if (! isBuffered) fflush()
+}" "${awkArgs[@]}"
 fi
