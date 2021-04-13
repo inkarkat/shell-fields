@@ -120,8 +120,8 @@ NR == 1 {
     firstTwoFields = $1 FS $2
     if (NF < 2 || substr($0, 1, length(firstTwoFields)) == firstTwoFields) {
 	OFS = FS
-    } else if (FS == " " && (substr($0, 1, length(firstTwoFields)) == $1 "\t" $2)) {
-	OFS = "\t"
+    } else if (FS == " ") {
+	OFS = ((substr($0, 1, length(firstTwoFields)) == $1 "\t" $2) ? "\t" : " ")
     } else {
 	print "ERROR: The field separator has to be a literal string; it cannot be a regular expression." > "/dev/stderr"
 	exit 2
