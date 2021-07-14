@@ -7,11 +7,14 @@ printUsage()
     cat <<HELPTEXT
 Print lines where selected field(s) N (-N counted from behind), separated by FS, match a PATTERN.
 HELPTEXT
+    echo
     printf 'Usage: cat FILE [...] | %q %s\n' "$(basename "$1")" '[-F|--field-separator FS] [-u|--unbuffered] GREP-OPTIONS [...] [-]N [...]'
     printf 'Usage: %q %s\n' "$(basename "$1")" '-i|--input FILESPEC [...] GREP-OPTIONS [...] [-]N [...] [-?|-h|--help]'
+    echo
     cat <<HELPTEXT
 Print lines where any but the passed field(s) N (-N counted from behind), separated by FS, match a PATTERN.
 HELPTEXT
+    echo
     printf 'Usage: cat FILE [...] | %q %s\n' "$(basename "$1")" '[-F|--field-separator FS] [-u|--unbuffered] -V|--invert-fields GREP-OPTIONS [...] [-]N [...]'
     printf 'Usage: %q %s\n' "$(basename "$1")" '-i|--input FILESPEC [...] -V|--invert-fields GREP-OPTIONS [...] [-]N [...] [-?|-h|--help]'
 }
@@ -28,6 +31,8 @@ typeset -a awkArgs=()
 isInvertFields=
 isOnlyMatching=
 isPerlRegexp=
+isFixedStrings=
+isWordRegexp=
 while [ $# -ne 0 ]
 do
     case "$1" in
@@ -36,9 +41,12 @@ do
 	-+([EGi]))		grepArgs+=("$1"); shift;;
 	--@(extended-regexp|basic-regexp|ignore-case))
 				grepArgs+=("$1"); shift;;
-	--fixed-strings)	grepArgs+=("$1"); [ "$fieldSeparator" = '[	 ]' ] && fieldSeparator=' '; shift;;
+	--fixed-strings)	grepArgs+=("$1"); [ "$fieldSeparator" = '[	 ]' ] && fieldSeparator=' '; shift; isFixedStrings=t;;
 	--perl-regexp|-P)	grepArgs+=("$1"); isPerlRegexp=t; shift;;
-	--word-regexp|-w)	grepArgs+=("$1"); separatorGrepArgs=(-e '^[0-9][0-9]*'); shift;;    # A (usually) non-word separator won't be matched; need to aim for the leading field number to include the unfiltered fields.
+	--word-regexp|-w)	grepArgs+=("$1"); separatorGrepArgs=(-e '^[0-9][0-9]*'); shift; isWordRegexp=t;;    # A (usually) non-word separator won't be matched; need to aim for the leading field number to include the unfiltered fields.
+	--line-regexp|-x)	echo >&2 'ERROR: -x|--line-regexp is not supported; use explicit anchoring with ^ and $.'
+				exit 2
+				;;
 	--invert-match|-v)	grepArgs+=("$1"); separatorGrepArgs=(); shift;;	# Because of the inversion, we must not match the separators now so that they get included.
 	--only-matching|-o)	grepArgs+=("$1"); isOnlyMatching=t; shift;;
 	--regexp|-e)		grepPatternArgs+=("$1" "$2"); shift; shift;;
@@ -57,16 +65,19 @@ do
     esac
 done
 if [ ${#grepPatternArgs[@]} -eq 0 ]; then
-    echo >&2 'ERROR: No GREP-OPTIONS passed.'
-    echo >&2
-    printUsage "$0" >&2
+    echo 'ERROR: No GREP-OPTIONS passed.'
+    echo
+    printUsage "$0"
     exit 2
 elif [ $# -eq 0 ]; then
-    echo >&2 'ERROR: No field number N passed.'
-    echo >&2
-    printUsage "$0" >&2
+    echo 'ERROR: No field number N passed.'
+    echo
+    printUsage "$0"
     exit 2
-fi
+elif [ "$isFixedStrings" ] && [ "$isWordRegexp" ]; then
+    echo 'ERROR: --fixed-strings cannot be combined with -w|--word-regexp.'
+    exit 2
+fi >&2
 case " ${!separatorGrepArgs*} " in
     *" separatorGrepArgs "*) true;;
     *) false;;
