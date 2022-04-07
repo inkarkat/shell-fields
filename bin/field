@@ -94,11 +94,11 @@ else
     for arg
     do
 	case $arg in
-	    +([0-9]))   selectors="$selectors ${isSubsequent:+$separator }\$$arg"
+	    +([0-9]))   selectors+=" ${isSubsequent:+$separator }\$$arg"
 			separator='OFS'
 			hasFieldNumber=t
 			;;
-	    -+([0-9]))  selectors="$selectors ${isSubsequent:+$separator }fieldFromEnd(${arg#-})"
+	    -+([0-9]))  selectors+=" ${isSubsequent:+$separator }fieldFromEnd(${arg#-})"
 			separator='OFS'
 			hasFieldNumber=t
 			;;
