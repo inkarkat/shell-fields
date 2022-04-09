@@ -67,7 +67,7 @@ typeset -a awkCall=(awk)
 typeset -a awkArgs=()
 typeset -a fields=()
 typeset -a expressionCode=()
-coproc=
+typeset -a coprocs=()
 isInPlace=
 inPlaceExtension=
 while [ $# -ne 0 ]
@@ -81,9 +81,9 @@ do
 	?(-)+([0-9]))		fields+=("$1")
 				awkExpr="$2"
 				if [[ "$awkExpr" =~ ^([^|]*)\|(.*)$ ]]; then
-				    coproc="${BASH_REMATCH[2]}"
+				    coprocs+=("${BASH_REMATCH[2]}")
 				    awkSourceExpr="${BASH_REMATCH[1]}"; [ -n "$awkSourceExpr" ] || awkSourceExpr='$fieldNr'
-				    printf -v awkExpr 'pipeThrough(%s)' "$awkSourceExpr"
+				    printf -v awkExpr 'pipeThrough(%s, coprocs[%d])' "$awkSourceExpr" "${#coprocs[@]}"
 				fi
 
 				case "$1" in
@@ -111,9 +111,9 @@ IFS=$'\n'
 exec "${awkCall[@]}" "${awkArgs[@]}" \
     -v "isBuffered=$isBuffered" \
     -v "fieldList=${fields[*]//\\/\\\\}" \
-    -v "coproc=${coproc//\\/\\\\}" \
+    -v "coprocList=${coprocs[*]//\\/\\\\}" \
 '
-function pipeThrough(input,      result)
+function pipeThrough(input, coproc,      result)
 {
     print input |& coproc
     coproc |& getline result
@@ -142,6 +142,7 @@ BEGIN {
     PROCINFO["sorted_in"] = "@ind_num_desc"
 
     N = split(fieldList, fields, "\n")
+    split(coprocList, coprocs, "\n")
 }
 NR == 1 {
     # Use FS as output separator; it cannot be a regular expression here.
