@@ -142,7 +142,12 @@ BEGIN {
     PROCINFO["sorted_in"] = "@ind_num_desc"
 
     N = split(fieldList, fields, "\n")
-    split(coprocList, coprocs, "\n")
+    coprocNum = split(coprocList, coprocs, "\n")
+}
+END {
+    for (c = 1; c <= coprocNum; ++c) {
+	close(coprocs[c])
+    }
 }
 NR == 1 {
     # Use FS as output separator; it cannot be a regular expression here.
