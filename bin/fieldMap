@@ -3,11 +3,12 @@ shopt -qs extglob
 
 printShortUsage()
 {
+    local awkFieldAndExpr='[-]N (AWK-EXPR | "[AWK-EXPR][+]|COMMAND") [[-]N ...]'
     # Note: short followed by long option; if the user knows the short one, she can
     # skim the long one.
-    printf 'Usage: cat FILE [...] | %q %s\n' "$(basename "$1")" '[-F|--field-separator FS] [-u|--unbuffered] [-]N AWK-EXPR [...]'
+    printf 'Usage: cat FILE [...] | %q %s\n' "$(basename "$1")" "[-F|--field-separator FS] [-u|--unbuffered] $awkFieldAndExpr"
     echo
-    printf 'Usage: %q %s\n' "$(basename "$1")" '... [-i[SUFFIX]|--in-place[=SUFFIX]] [-]N AWK-EXPR | "[AWK-EXPR][+]|COMMAND" [...] [--] [FILE ...] [-?|-h|--help]'
+    printf 'Usage: %q %s\n' "$(basename "$1")" "... [-i[SUFFIX]|--in-place[=SUFFIX]] $awkFieldAndExpr [--] [FILE ...] [-?|-h|--help]"
 }
 printUsage()
 {
