@@ -67,6 +67,7 @@ typeset -a awkCall=(awk)
 typeset -a awkArgs=()
 typeset -a fields=()
 typeset -a expressionCode=()
+coproc=
 isInPlace=
 inPlaceExtension=
 while [ $# -ne 0 ]
@@ -78,9 +79,16 @@ do
 	-i|--in-place)		isInPlace=t; shift;;
 	-i?*|--in-place=*)	isInPlace=t; inPlaceExtension="${1#-i}"; inPlaceExtension="${inPlaceExtension#--in-place=}"; shift;;
 	?(-)+([0-9]))		fields+=("$1")
+				awkExpr="$2"
+				if [[ "$awkExpr" =~ ^([^|]*)\|(.*)$ ]]; then
+				    coproc="${BASH_REMATCH[2]}"
+				    awkSourceExpr="${BASH_REMATCH[1]}"; [ -n "$awkSourceExpr" ] || awkSourceExpr='$fieldNr'
+				    printf -v awkExpr 'pipeThrough(%s)' "$awkSourceExpr"
+				fi
+
 				case "$1" in
-				    -*)	expressionCode+=("if (fieldNr == NF - ${1#-} + 1 && --fieldNrSequence == 0) return $2");;
-				    *)	expressionCode+=("if (fieldNr == $1 && --fieldNrSequence == 0) return $2");;
+				    -*)	expressionCode+=("if (fieldNr == NF - ${1#-} + 1 && --fieldNrSequence == 0) return $awkExpr");;
+				    *)	expressionCode+=("if (fieldNr == $1 && --fieldNrSequence == 0) return $awkExpr");;
 				esac
 				shift; shift
 				;;
@@ -103,7 +111,14 @@ IFS=$'\n'
 exec "${awkCall[@]}" "${awkArgs[@]}" \
     -v "isBuffered=$isBuffered" \
     -v "fieldList=${fields[*]//\\/\\\\}" \
+    -v "coproc=${coproc//\\/\\\\}" \
 '
+function pipeThrough(input,      result)
+{
+    print input |& coproc
+    coproc |& getline result
+    return result
+}
 function evaluateExpression(fieldNr, fieldNrSequence)
 {
 '"${expressionCode[*]}"'
