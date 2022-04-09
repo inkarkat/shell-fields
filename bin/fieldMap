@@ -7,7 +7,7 @@ printShortUsage()
     # skim the long one.
     printf 'Usage: cat FILE [...] | %q %s\n' "$(basename "$1")" '[-F|--field-separator FS] [-u|--unbuffered] [-]N AWK-EXPR [...]'
     echo
-    printf 'Usage: %q %s\n' "$(basename "$1")" '... [-i[SUFFIX]|--in-place[=SUFFIX]] [-]N AWK-EXPR [...] [--] [FILE ...] [-?|-h|--help]'
+    printf 'Usage: %q %s\n' "$(basename "$1")" '... [-i[SUFFIX]|--in-place[=SUFFIX]] [-]N AWK-EXPR | "[AWK-EXPR]|COMMAND" [...] [--] [FILE ...] [-?|-h|--help]'
 }
 printUsage()
 {
@@ -32,6 +32,19 @@ HELPDESCRIPTION
     AWK-EXPR		    Any valid expression in AWK, for example 42,
 			    '"foo"', '++\$fieldNr' (fieldNr refers to N), or
 			    '\$1 "(" length(\$1) ")"')
+    "|COMMAND"		    Start COMMAND as a coprocess. The original contents
+			    of the target field are written to COMMAND's
+			    standard input, and one resulting line is read back
+			    and replaces the field's contents. So command must
+			    respond with one output line for each input line,
+			    without buffering.
+    "AWK-EXPR|COMMAND"	    Start COMMAND as a coprocess. For each target field,
+			    the AWK-EXPR is written to COMMAND's standard input,
+			    and one resulting line is read back and replaces
+			    the field's contents.
+			    So whereas |COMMAND transforms a particular field,
+			    this form allows to synthesize a field from other
+			    fields.
     --field-separator|-F FS Use FS as the input field separator (as with AWK).
     --unbuffered|-u	    Immediately output each read line.
     --in-place[=SUFFIX]|-i[SUFFIX]
