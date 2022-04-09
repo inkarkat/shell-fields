@@ -7,7 +7,7 @@ printShortUsage()
     # skim the long one.
     printf 'Usage: cat FILE [...] | %q %s\n' "$(basename "$1")" '[-F|--field-separator FS] [-u|--unbuffered] [-]N AWK-EXPR [...]'
     echo
-    printf 'Usage: %q %s\n' "$(basename "$1")" '... [-i[SUFFIX]|--in-place[=SUFFIX]] [-]N AWK-EXPR | "[AWK-EXPR]|COMMAND" [...] [--] [FILE ...] [-?|-h|--help]'
+    printf 'Usage: %q %s\n' "$(basename "$1")" '... [-i[SUFFIX]|--in-place[=SUFFIX]] [-]N AWK-EXPR | "[AWK-EXPR][+]|COMMAND" [...] [--] [FILE ...] [-?|-h|--help]'
 }
 printUsage()
 {
@@ -45,6 +45,12 @@ HELPDESCRIPTION
 			    So whereas |COMMAND transforms a particular field,
 			    this form allows to synthesize a field from other
 			    fields.
+    "[AWK-EXPR]+|COMMAND"   Start COMMAND as a coprocess in a pseudo-tty instead
+			    of using pipes. This typically fools the standard
+			    library into line buffering, and unblocks a hanging
+			    invocation. It is more efficient and robust to force
+			    line buffering via a command-line argument (e.g.
+			    sed --unbuffered), or through a command like stdbuf.
     --field-separator|-F FS Use FS as the input field separator (as with AWK).
     --unbuffered|-u	    Immediately output each read line.
     --in-place[=SUFFIX]|-i[SUFFIX]
@@ -68,6 +74,7 @@ typeset -a awkArgs=()
 typeset -a fields=()
 typeset -a expressionCode=()
 typeset -a coprocs=()
+typeset -a coprocsWantingPty=()
 isInPlace=
 inPlaceExtension=
 while [ $# -ne 0 ]
@@ -80,8 +87,9 @@ do
 	-i?*|--in-place=*)	isInPlace=t; inPlaceExtension="${1#-i}"; inPlaceExtension="${inPlaceExtension#--in-place=}"; shift;;
 	?(-)+([0-9]))		fields+=("$1")
 				awkExpr="$2"
-				if [[ "$awkExpr" =~ ^([^|]*)\|(.*)$ ]]; then
-				    coprocs+=("${BASH_REMATCH[2]}")
+				if [[ "$awkExpr" =~ ^([^|]*[^|+]|[^|+]?)(\+?)\|(.*)$ ]]; then
+				    coprocs+=("${BASH_REMATCH[3]}")
+				    [ "${BASH_REMATCH[2]}" = '+' ] && coprocsWantingPty+=("${BASH_REMATCH[3]}")
 				    awkSourceExpr="${BASH_REMATCH[1]}"; [ -n "$awkSourceExpr" ] || awkSourceExpr='$fieldNr'
 				    printf -v awkExpr 'pipeThrough(%s, coprocs[%d])' "$awkSourceExpr" "${#coprocs[@]}"
 				fi
@@ -112,6 +120,7 @@ exec "${awkCall[@]}" "${awkArgs[@]}" \
     -v "isBuffered=$isBuffered" \
     -v "fieldList=${fields[*]//\\/\\\\}" \
     -v "coprocList=${coprocs[*]//\\/\\\\}" \
+    -v "coprocWantingPtyList=${coprocsWantingPty[*]//\\/\\\\}" \
 '
 function pipeThrough(input, coproc,      result)
 {
@@ -143,6 +152,11 @@ BEGIN {
 
     N = split(fieldList, fields, "\n")
     coprocNum = split(coprocList, coprocs, "\n")
+
+    coprocWantingPtyNum = split(coprocWantingPtyList, coprocsWantingPty, "\n")
+    for (c = 1; c <= coprocWantingPtyNum; ++c) {
+	PROCINFO[coprocsWantingPty[c], "pty"] = 1
+    }
 }
 END {
     for (c = 1; c <= coprocNum; ++c) {
