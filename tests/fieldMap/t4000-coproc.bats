@@ -1,7 +1,6 @@
 #!/usr/bin/env bats
 
-readonly uppercaseCommand='sed --unbuffered y/abcdefghijklmnopqrstuvwxyz/ABCDEFGHIJKLMNOPQRSTUVWXYZ/'
-readonly countCommand='sed --unbuffered -n ='
+load coproc
 
 @test "uppercasing first field" {
     run fieldMap -F $'\t' 1 "|$uppercaseCommand" "${BATS_TEST_DIRNAME}/tabbed.txt"
