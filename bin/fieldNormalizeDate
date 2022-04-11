@@ -6,7 +6,7 @@ printShortUsage()
     local awkFieldAndFormat='([-]N [FORMAT]) [[-]N ...]'
     printf 'Usage: cat FILE [...] | %q %s\n' "$(basename "$1")" "[-F|--field-separator FS] [-u|--unbuffered] $awkFieldAndFormat"
     echo
-    printf 'Usage: %q %s\n' "$(basename "$1")" "... [-i[SUFFIX]|--in-place[=SUFFIX]] $awkFieldAndFormat [--] [FILE ...] [-?|-h|--help]"
+    printf 'Usage: %q %s\n' "$(basename "$1")" "... [-i[SUFFIX]|--in-place[=SUFFIX]] $awkFieldAndFormat -- [FILE ...] [-?|-h|--help]"
 }
 printUsage()
 {
@@ -60,7 +60,7 @@ do
 			quotedFormat=
 			case "$1" in
 			    ?(-)+([0-9]))   ;;
-			    '')		    ;;
+			    ''|--)	    ;;
 			    *)		    printf -v quotedFormat %q "$1"; shift;;
 			esac
 			fieldMappings+=("$field" "|memoizeLines --command 'date --date {} ${quotedFormat:++}${quotedFormat} || printf %s {}'")
