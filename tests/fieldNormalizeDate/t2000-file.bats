@@ -3,16 +3,16 @@
 load fixture
 
 @test "normalizing first field to default date format" {
-    runStdout fieldNormalizeDate -F $'\t' 1 -- "${BATS_TEST_DIRNAME}/tabbed.txt"
+    LC_ALL=C runStdout fieldNormalizeDate -F $'\t' 1 -- "${BATS_TEST_DIRNAME}/tabbed.txt"
     [ $status -eq 0 ]
-    [ "$output" = "Wed 20. Apr 2022 00:00:00 CEST	foo	@1649663333
-Mon 11. Apr 2022 09:49:24 CEST	now	@1111111111
+    [ "$output" = "Wed Apr 20 00:00:00 CEST 2022	foo	@1649663333
+Mon Apr 11 09:49:24 CEST 2022	now	@1111111111
 not a date	invalid	@1111111111
-Fri 1. Apr 2022 00:00:00 CEST	joke	@1649666666" ]
+Fri Apr  1 00:00:00 CEST 2022	joke	@1649666666" ]
 }
 
 @test "normalizing first field to epoch" {
-    runStdout fieldNormalizeDate -F $'\t' 1 %s -- "${BATS_TEST_DIRNAME}/tabbed.txt"
+    LC_ALL=C runStdout fieldNormalizeDate -F $'\t' 1 %s -- "${BATS_TEST_DIRNAME}/tabbed.txt"
     [ $status -eq 0 ]
     [ "$output" = "1650405600	foo	@1649663333
 1649663364	now	@1111111111
@@ -21,16 +21,16 @@ not a date	invalid	@1111111111
 }
 
 @test "normalizing first field and last field to default date format" {
-    runStdout fieldNormalizeDate -F $'\t' 1 -1 -- "${BATS_TEST_DIRNAME}/tabbed.txt"
+    LC_ALL=C runStdout fieldNormalizeDate -F $'\t' 1 -1 -- "${BATS_TEST_DIRNAME}/tabbed.txt"
     [ $status -eq 0 ]
-    [ "$output" = "Wed 20. Apr 2022 00:00:00 CEST	foo	Mon 11. Apr 2022 09:48:53 CEST
-Mon 11. Apr 2022 09:49:24 CEST	now	Fri 18. Mar 2005 02:58:31 CET
-not a date	invalid	Fri 18. Mar 2005 02:58:31 CET
-Fri 1. Apr 2022 00:00:00 CEST	joke	Mon 11. Apr 2022 10:44:26 CEST" ]
+    [ "$output" = "Wed Apr 20 00:00:00 CEST 2022	foo	Mon Apr 11 09:48:53 CEST 2022
+Mon Apr 11 09:49:24 CEST 2022	now	Fri Mar 18 02:58:31 CET 2005
+not a date	invalid	Fri Mar 18 02:58:31 CET 2005
+Fri Apr  1 00:00:00 CEST 2022	joke	Mon Apr 11 10:44:26 CEST 2022" ]
 }
 
 @test "normalizing first field and last field to custom date formats that create an additional field" {
-    runStdout fieldNormalizeDate -F $'\t' 1 '[%U/%Y]' -1 $'on %F\t%R' -- "${BATS_TEST_DIRNAME}/tabbed.txt"
+    LC_ALL=C runStdout fieldNormalizeDate -F $'\t' 1 '[%U/%Y]' -1 $'on %F\t%R' -- "${BATS_TEST_DIRNAME}/tabbed.txt"
     [ $status -eq 0 ]
     [ "$output" = "[16/2022]	foo	on 2022-04-11	09:48
 [15/2022]	now	on 2005-03-18	02:58
