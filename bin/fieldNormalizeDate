@@ -6,7 +6,7 @@ printShortUsage()
     local awkFieldAndFormat='([-]N [FORMAT]) [[-]N ...]'
     printf 'Usage: cat FILE [...] | %q %s\n' "$(basename "$1")" "[-F|--field-separator FS] [-u|--unbuffered] $awkFieldAndFormat"
     echo
-    printf 'Usage: %q %s\n' "$(basename "$1")" "... [-i[SUFFIX]|--in-place[=SUFFIX]] $awkFieldAndFormat -- [FILE ...] [-?|-h|--help]"
+    printf 'Usage: %q %s\n' "$(basename "$1")" "... [-u|--utc|--universal] [-i[SUFFIX]|--in-place[=SUFFIX]] $awkFieldAndFormat -- [FILE ...] [-?|-h|--help]"
 }
 printUsage()
 {
@@ -29,6 +29,8 @@ HELPDESCRIPTION
     cat <<HELPTEXT
     FORMAT		    Date format as understood by the date command, e.g.
 			    %s for seconds since 1970 (epoch).
+    --universal|--utc|-u    Date option: Print Coordinated Universal Time (UTC).
+			    Applies to all following FORMATs.
     --field-separator|-F FS Use FS as the input field separator (as with AWK).
     --unbuffered|-u	    Immediately output each read line.
     --in-place[=SUFFIX]|-i[SUFFIX]
@@ -44,10 +46,14 @@ HELPTEXT
 
 typeset -a fieldMapArgs=()
 typeset -a fieldMappings=()
+typeset -a dateArgs=()
 while [ $# -ne 0 ]
 do
     case "$1" in
 	--help|-h|-\?)	shift; printLongUsage "$0"; exit 0;;
+
+	--universal|--utc|-u)
+			dateArgs+=("$1"); shift;;
 
 	-+([u]))	fieldMapArgs+=("$1"); shift;;
 	--@(unbuffered))
@@ -60,13 +66,14 @@ do
 			quotedFormat=
 			case "$1" in
 			    ?(-)+([0-9]))   ;;
-			    ''|--)	    ;;
+			    ''|-*)	    ;;
 			    *)		    quotedFormat="$(printf %q "$1" | changeQuoting --posix)"; shift;;
 			esac
-			quotedMemoizeCommand="$(printf %q "date --date {} ${quotedFormat:++}${quotedFormat} || printf %s {}" | changeQuoting --posix)"
+			quotedDateArgs=''; [ ${#dateArgs[@]} -eq 0 ] || quotedDateArgs="$(printf '%q ' "${dateArgs[@]}" | changeQuoting --posix)"
+			quotedMemoizeCommand="$(printf %q "date $quotedDateArgs --date {} ${quotedFormat:++}${quotedFormat} || printf %s {}" | changeQuoting --posix)"
 			fieldMappings+=("$field" "|memoizeLines --command $quotedMemoizeCommand")
 			# Note: Could use succeedsOrRetryArg, but that's probably overkill. On the other hand, it would eliminate the second round of POSIX-quoting.
-			#fieldMappings+=("$field" "|MEMOIZELINES_ARG_MARKER=@@ memoizeLines succeedsOrRetryArg date --date {} ${quotedFormat:++}${quotedFormat} @@")
+			#fieldMappings+=("$field" "|MEMOIZELINES_ARG_MARKER=@@ memoizeLines succeedsOrRetryArg date $quotedDateArgs --date {} ${quotedFormat:++}${quotedFormat} @@")
 			;;
 	--)		fieldMapArgs+=("$1"); shift; break;;
 	-*)		{ echo "ERROR: Unknown option \"$1\"!"; echo; printUsage "$0"; } >&2; exit 2;;
