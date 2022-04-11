@@ -61,10 +61,11 @@ do
 			case "$1" in
 			    ?(-)+([0-9]))   ;;
 			    ''|--)	    ;;
-			    *)		    printf -v quotedFormat %q "$1"; shift;;
+			    *)		    quotedFormat="$(printf %q "$1" | changeQuoting --posix)"; shift;;
 			esac
-			fieldMappings+=("$field" "|memoizeLines --command 'date --date {} ${quotedFormat:++}${quotedFormat} || printf %s {}'")
-			# Note: Could use succeedsOrRetryArg, but that's probably overkill.
+			quotedMemoizeCommand="$(printf %q "date --date {} ${quotedFormat:++}${quotedFormat} || printf %s {}" | changeQuoting --posix)"
+			fieldMappings+=("$field" "|memoizeLines --command $quotedMemoizeCommand")
+			# Note: Could use succeedsOrRetryArg, but that's probably overkill. On the other hand, it would eliminate the second round of POSIX-quoting.
 			#fieldMappings+=("$field" "|MEMOIZELINES_ARG_MARKER=@@ memoizeLines succeedsOrRetryArg date --date {} ${quotedFormat:++}${quotedFormat} @@")
 			;;
 	--)		fieldMapArgs+=("$1"); shift; break;;

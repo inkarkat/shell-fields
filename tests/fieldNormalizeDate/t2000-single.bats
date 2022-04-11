@@ -30,7 +30,6 @@ Fri 1. Apr 2022 00:00:00 CEST	joke	Mon 11. Apr 2022 10:44:26 CEST" ]
 }
 
 @test "normalizing first field and last field to custom date formats that create an additional field" {
-    skip
     runStdout fieldNormalizeDate -F $'\t' 1 '[%U/%Y]' -1 $'on %F\t%R' -- "${BATS_TEST_DIRNAME}/tabbed.txt"
     [ $status -eq 0 ]
     [ "$output" = "[16/2022]	foo	on 2022-04-11	09:48
