@@ -72,8 +72,21 @@ do
 			esac
 			quotedDateArgs=''; [ ${#dateArgs[@]} -eq 0 ] || quotedDateArgs="$(printf '%q ' "${dateArgs[@]}" | changeQuoting --posix)"
 			quotedMemoizeCommand="$(printf %q "date $quotedDateArgs --date {} ${quotedFormat:++}${quotedFormat} || printf %s {}" | changeQuoting --posix)"
+
+			# Note: Could almost use "date --file=-" directly,
+			# without the memoization. But there would be no output
+			# to standard out in case of an invalid date, so the AWK
+			# mapping would hang. It could be worked around by
+			# redirecting the error message to standard out, but
+			# then we'd still have to use an sed stage to cut out
+			# the (locale-dependent) error message around the
+			# original invalid date.
+
 			fieldMappings+=("$field" "|memoizeLines --command $quotedMemoizeCommand")
-			# Note: Could use succeedsOrRetryArg, but that's probably overkill. On the other hand, it would eliminate the second round of POSIX-quoting.
+
+			# Note: Could use succeedsOrRetryArg, but that's
+			# probably overkill. On the other hand, it would
+			# eliminate the second round of POSIX-quoting.
 			#fieldMappings+=("$field" "|MEMOIZELINES_ARG_MARKER=@@ memoizeLines succeedsOrRetryArg date $quotedDateArgs --date {} ${quotedFormat:++}${quotedFormat} @@")
 			;;
 	--)		fieldMapArgs+=("$1"); shift; break;;
