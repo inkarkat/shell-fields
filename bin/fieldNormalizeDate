@@ -1,0 +1,108 @@
+#!/bin/bash
+shopt -qs extglob
+
+printShortUsage()
+{
+    local awkFieldAndFormat='([-]N [[-f|--format] FORMAT]) [[-]N ...]'
+    printf 'Usage: cat FILE [...] | %q %s\n' "$(basename "$1")" "[-F|--field-separator FS] [-u|--unbuffered] $awkFieldAndFormat"
+    echo
+    printf 'Usage: %q %s\n' "$(basename "$1")" "... [-u|--utc|--universal] [-i[SUFFIX]|--in-place[=SUFFIX]] $awkFieldAndFormat -- [FILE ...] [-?|-h|--help]"
+}
+printUsage()
+{
+    # This is the short help when launched with no or incorrect arguments.
+    # It is printed to stderr to avoid accidental processing.
+    printShortUsage "$1" >&2
+    printf >&2 '\nTry %q --help for more information.\n' "$(basename "$1")"
+}
+printLongUsage()
+{
+    # This is the long "man page" when launched with the help argument.
+    # It is printed to stdout to allow paging with 'more'.
+    cat <<HELPDESCRIPTION
+Normalize the date in field N (-N counted from behind) to the default date
+format (or passed FORMAT).
+HELPDESCRIPTION
+    echo
+    printShortUsage "$1"
+    echo
+    cat <<HELPTEXT
+    FORMAT		    Date format as understood by the date command, e.g.
+			    %s for seconds since 1970 (epoch).
+    --universal|--utc|-u    Date option: Print Coordinated Universal Time (UTC).
+			    Applies to all following FORMATs.
+    --field-separator|-F FS Use FS as the input field separator (as with AWK).
+    --unbuffered|-u	    Immediately output each read line.
+    --in-place[=SUFFIX]|-i[SUFFIX]
+			    Edit FILE(s) in place (makes backup if SUFFIX
+			    supplied).
+EXIT STATUS:
+    0	Complete success.
+    1	AWK processing error.
+    2	Bad invocation, wrong or missing command-line arguments.
+    3	Internal error or failed assertion.
+HELPTEXT
+}
+
+posixQuote()
+{
+    printf '%q ' "$@" | changeQuoting --posix
+}
+
+typeset -a fieldMapArgs=()
+typeset -a fieldMappings=()
+typeset -a dateArgs=()
+while [ $# -ne 0 ]
+do
+    case "$1" in
+	--help|-h|-\?)	shift; printLongUsage "$0"; exit 0;;
+
+	--universal|--utc|-u)
+			dateArgs+=("$1"); shift;;
+
+	-+([u]))	fieldMapArgs+=("$1"); shift;;
+	--@(unbuffered))
+			fieldMapArgs+=("$1"); shift;;
+	-[Fi])		fieldMapArgs+=("$1" "$2"); shift; shift;;
+	--in-place=*)	fieldMapArgs+=("$1"); shift;;
+	--@(field-separator|in-place))
+			fieldMapArgs+=("$1" "$2"); shift; shift;;
+	?(-)+([0-9]))	field="$1"; shift
+			quotedFormat=
+			case "$1" in
+			    ?(-)+([0-9]))   ;;
+			    --format|-f)    shift; quotedFormat="$(posixQuote "$1")"; shift;;
+			    ''|-*)	    ;;
+			    *)		    quotedFormat="$(posixQuote "$1")"; shift;;
+			esac
+			quotedDateArgs=''; [ ${#dateArgs[@]} -eq 0 ] || quotedDateArgs="$(posixQuote "${dateArgs[@]}")"
+			quotedMemoizeCommand="$(posixQuote "date $quotedDateArgs --date {} ${quotedFormat:++}${quotedFormat} || printf %s {}")"
+
+			# Note: Could almost use "date --file=-" directly,
+			# without the memoization. But there would be no output
+			# to standard out in case of an invalid date, so the AWK
+			# mapping would hang. It could be worked around by
+			# redirecting the error message to standard out, but
+			# then we'd still have to use an sed stage to cut out
+			# the (locale-dependent) error message around the
+			# original invalid date.
+
+			fieldMappings+=("$field" "|memoizeLines --command $quotedMemoizeCommand")
+
+			# Note: Could use succeedsOrRetryArg, but that's
+			# probably overkill. On the other hand, it would
+			# eliminate the second round of POSIX-quoting.
+			#fieldMappings+=("$field" "|MEMOIZELINES_ARG_MARKER=@@ memoizeLines succeedsOrRetryArg date $quotedDateArgs --date {} ${quotedFormat:++}${quotedFormat} @@")
+			;;
+	--)		fieldMapArgs+=("$1"); shift; break;;
+	-*)		{ echo "ERROR: Unknown option \"$1\"!"; echo; printUsage "$0"; } >&2; exit 2;;
+	*)		break;;
+    esac
+done
+if [ ${#fieldMappings[@]} -eq 0 ]; then
+    echo 'ERROR: No [-]N [[-f|--format] FORMAT] passed.'
+    echo
+    printUsage "$0"
+    exit 2
+fi >&2
+exec fieldMap "${fieldMappings[@]}" "${fieldMapArgs[@]}" "$@"
