@@ -3,7 +3,7 @@ shopt -qs extglob
 
 printShortUsage()
 {
-    local awkFieldAndFormat='([-]N [FORMAT]) [[-]N ...]'
+    local awkFieldAndFormat='([-]N [[-f|--format] FORMAT]) [[-]N ...]'
     printf 'Usage: cat FILE [...] | %q %s\n' "$(basename "$1")" "[-F|--field-separator FS] [-u|--unbuffered] $awkFieldAndFormat"
     echo
     printf 'Usage: %q %s\n' "$(basename "$1")" "... [-u|--utc|--universal] [-i[SUFFIX]|--in-place[=SUFFIX]] $awkFieldAndFormat -- [FILE ...] [-?|-h|--help]"
@@ -66,6 +66,7 @@ do
 			quotedFormat=
 			case "$1" in
 			    ?(-)+([0-9]))   ;;
+			    --format|-f)    shift; quotedFormat="$(printf %q "$1" | changeQuoting --posix)"; shift;;
 			    ''|-*)	    ;;
 			    *)		    quotedFormat="$(printf %q "$1" | changeQuoting --posix)"; shift;;
 			esac
@@ -81,7 +82,7 @@ do
     esac
 done
 if [ ${#fieldMappings[@]} -eq 0 ]; then
-    echo 'ERROR: No [-]N [FORMAT] passed.'
+    echo 'ERROR: No [-]N [[-f|--format] FORMAT] passed.'
     echo
     printUsage "$0"
     exit 2

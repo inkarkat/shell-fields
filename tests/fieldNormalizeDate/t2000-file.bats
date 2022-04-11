@@ -20,6 +20,15 @@ not a date	invalid	@1111111111
 1648764000	joke	@1649666666" ]
 }
 
+@test "normalizing first field to epoch with --format" {
+    LC_ALL=C runStdout fieldNormalizeDate -F $'\t' 1 --format -%s- -- "${BATS_TEST_DIRNAME}/tabbed.txt"
+    [ $status -eq 0 ]
+    [ "$output" = "-1650405600-	foo	@1649663333
+-1649663364-	now	@1111111111
+not a date	invalid	@1111111111
+-1648764000-	joke	@1649666666" ]
+}
+
 @test "normalizing first field and last field to default date format" {
     LC_ALL=C runStdout fieldNormalizeDate -F $'\t' 1 -1 -- "${BATS_TEST_DIRNAME}/tabbed.txt"
     [ $status -eq 0 ]
