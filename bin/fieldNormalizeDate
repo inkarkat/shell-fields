@@ -44,6 +44,11 @@ EXIT STATUS:
 HELPTEXT
 }
 
+posixQuote()
+{
+    printf '%q ' "$@" | changeQuoting --posix
+}
+
 typeset -a fieldMapArgs=()
 typeset -a fieldMappings=()
 typeset -a dateArgs=()
@@ -66,12 +71,12 @@ do
 			quotedFormat=
 			case "$1" in
 			    ?(-)+([0-9]))   ;;
-			    --format|-f)    shift; quotedFormat="$(printf %q "$1" | changeQuoting --posix)"; shift;;
+			    --format|-f)    shift; quotedFormat="$(posixQuote "$1")"; shift;;
 			    ''|-*)	    ;;
-			    *)		    quotedFormat="$(printf %q "$1" | changeQuoting --posix)"; shift;;
+			    *)		    quotedFormat="$(posixQuote "$1")"; shift;;
 			esac
-			quotedDateArgs=''; [ ${#dateArgs[@]} -eq 0 ] || quotedDateArgs="$(printf '%q ' "${dateArgs[@]}" | changeQuoting --posix)"
-			quotedMemoizeCommand="$(printf %q "date $quotedDateArgs --date {} ${quotedFormat:++}${quotedFormat} || printf %s {}" | changeQuoting --posix)"
+			quotedDateArgs=''; [ ${#dateArgs[@]} -eq 0 ] || quotedDateArgs="$(posixQuote "${dateArgs[@]}")"
+			quotedMemoizeCommand="$(posixQuote "date $quotedDateArgs --date {} ${quotedFormat:++}${quotedFormat} || printf %s {}")"
 
 			# Note: Could almost use "date --file=-" directly,
 			# without the memoization. But there would be no output
