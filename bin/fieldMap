@@ -6,7 +6,7 @@ printShortUsage()
     local awkFieldAndExpr='[-]N (AWK-EXPR | "[AWK-EXPR][+]|COMMAND") [[-]N ...]'
     # Note: short followed by long option; if the user knows the short one, she can
     # skim the long one.
-    printf 'Usage: cat FILE [...] | %q %s\n' "$(basename "$1")" "[-F|--field-separator FS] [-u|--unbuffered] [-E|--coprocess-error abort|ignore] $awkFieldAndExpr"
+    printf 'Usage: cat FILE [...] | %q %s\n' "$(basename "$1")" "[-F|--field-separator FS] [-u|--unbuffered] [-E|--coprocess-error abort|ignore [--coprocess-error-value TEXT]] $awkFieldAndExpr"
     echo
     printf 'Usage: %q %s\n' "$(basename "$1")" "... [-i[SUFFIX]|--in-place[=SUFFIX]] $awkFieldAndExpr [--] [FILE ...] [-?|-h|--help]"
 }
@@ -60,6 +60,9 @@ HELPDESCRIPTION
     --coprocess-error|-E ignore
 			    When COMMAND fails, do not restart it; following
 			    mapped fields will be empty.
+    --coprocess-error-value TEXT
+			    When COMMAND fails (and processing isn't aborted),
+			    use TEXT for the mapped field.
     --in-place[=SUFFIX]|-i[SUFFIX]
 			    Edit FILE(s) in place (makes backup if SUFFIX
 			    supplied).
@@ -83,6 +86,7 @@ typeset -a expressionCode=()
 typeset -a coprocs=()
 typeset -a coprocsWantingPty=()
 onCoprocError=abort
+coprocErrorValue=
 isInPlace=
 inPlaceExtension=
 while [ $# -ne 0 ]
@@ -98,6 +102,8 @@ do
 				    *)  { printf 'ERROR: Invalid value for --coprocess-error: %s\n' "$onCoprocError"; echo; printShortUsage "$0"; } >&2; exit 2;;
 				esac
 				;;
+	--coprocess-error-value)
+				shift; coprocErrorValue="$1"; shift;;
 	-i|--in-place)		isInPlace=t; shift;;
 	-i?*|--in-place=*)	isInPlace=t; inPlaceExtension="${1#-i}"; inPlaceExtension="${inPlaceExtension#--in-place=}"; shift;;
 	?(-)+([0-9]))		fields+=("$1")
@@ -137,6 +143,7 @@ exec "${awkCall[@]}" "${awkArgs[@]}" \
     -v "coprocList=${coprocs[*]//\\/\\\\}" \
     -v "coprocWantingPtyList=${coprocsWantingPty[*]//\\/\\\\}" \
     -v "onCoprocError=$onCoprocError" \
+    -v "coprocErrorValue=${coprocErrorValue//\\/\\\\}" \
 '
 function pipeThrough(input, coproc,      result)
 {
@@ -145,7 +152,7 @@ function pipeThrough(input, coproc,      result)
 	if (onCoprocError == "abort") {
 	    exit 1
 	} else if (onCoprocError == "ignore") {
-	    return ""
+	    return coprocErrorValue
 	} else {
 	    printf("ASSERT: Invalid onCoprocError: %s\n", onCoprocError) > "/dev/stderr"
 	    exit 3
