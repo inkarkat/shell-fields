@@ -6,7 +6,7 @@ printShortUsage()
     local awkFieldAndExpr='[-]N (AWK-EXPR | "[AWK-EXPR][+]|COMMAND") [[-]N ...]'
     # Note: short followed by long option; if the user knows the short one, she can
     # skim the long one.
-    printf 'Usage: cat FILE [...] | %q %s\n' "$(basename "$1")" "[-F|--field-separator FS] [-u|--unbuffered] [-E|--coprocess-error abort|ignore [--coprocess-error-value TEXT]] $awkFieldAndExpr"
+    printf 'Usage: cat FILE [...] | %q %s\n' "$(basename "$1")" "[-F|--field-separator FS] [-u|--unbuffered] [-E|--coprocess-error abort|ignore [--coprocess-error-value TEXT]|restart] $awkFieldAndExpr"
     echo
     printf 'Usage: %q %s\n' "$(basename "$1")" "... [-i[SUFFIX]|--in-place[=SUFFIX]] $awkFieldAndExpr [--] [FILE ...] [-?|-h|--help]"
 }
@@ -63,6 +63,10 @@ HELPDESCRIPTION
     --coprocess-error-value TEXT
 			    When COMMAND fails (and processing isn't aborted),
 			    use TEXT for the mapped field.
+    --coprocess-error|-E restart
+			    When COMMAND fails, the field will be empty /
+			    contain TEXT, but relaunch the COMMAND for the
+			    following field, and try to resume processing.
     --in-place[=SUFFIX]|-i[SUFFIX]
 			    Edit FILE(s) in place (makes backup if SUFFIX
 			    supplied).
@@ -98,7 +102,7 @@ do
 	--coprocess-error|-E)	shift
 				onCoprocError="$1"; shift
 				case "$onCoprocError" in
-				    abort|ignore)  ;;
+				    abort|ignore|restart)  ;;
 				    *)  { printf 'ERROR: Invalid value for --coprocess-error: %s\n' "$onCoprocError"; echo; printShortUsage "$0"; } >&2; exit 2;;
 				esac
 				;;
@@ -152,6 +156,9 @@ function pipeThrough(input, coproc,      result)
 	if (onCoprocError == "abort") {
 	    exit 1
 	} else if (onCoprocError == "ignore") {
+	    return coprocErrorValue
+	} else if (onCoprocError == "restart") {
+	    close(coproc)
 	    return coprocErrorValue
 	} else {
 	    printf("ASSERT: Invalid onCoprocError: %s\n", onCoprocError) > "/dev/stderr"
