@@ -6,7 +6,7 @@ printShortUsage()
     local awkFieldAndExpr='[-]N (AWK-EXPR | "[AWK-EXPR][+]|COMMAND") [[-]N ...]'
     # Note: short followed by long option; if the user knows the short one, she can
     # skim the long one.
-    printf 'Usage: cat FILE [...] | %q %s\n' "$(basename "$1")" "[-F|--field-separator FS] [-u|--unbuffered] $awkFieldAndExpr"
+    printf 'Usage: cat FILE [...] | %q %s\n' "$(basename "$1")" "[-F|--field-separator FS] [-u|--unbuffered] [-E|--coprocess-error abort|ignore] $awkFieldAndExpr"
     echo
     printf 'Usage: %q %s\n' "$(basename "$1")" "... [-i[SUFFIX]|--in-place[=SUFFIX]] $awkFieldAndExpr [--] [FILE ...] [-?|-h|--help]"
 }
@@ -54,6 +54,12 @@ HELPDESCRIPTION
 			    sed --unbuffered), or through a command like stdbuf.
     --field-separator|-F FS Use FS as the input field separator (as with AWK).
     --unbuffered|-u	    Immediately output each read line.
+    --coprocess-error|-E abort
+			    When COMMAND fails, abort the entire processing of
+			    FILE(s). This is the default behavior.
+    --coprocess-error|-E ignore
+			    When COMMAND fails, do not restart it; following
+			    mapped fields will be empty.
     --in-place[=SUFFIX]|-i[SUFFIX]
 			    Edit FILE(s) in place (makes backup if SUFFIX
 			    supplied).
@@ -76,6 +82,7 @@ typeset -a fields=()
 typeset -a expressionCode=()
 typeset -a coprocs=()
 typeset -a coprocsWantingPty=()
+onCoprocError=abort
 isInPlace=
 inPlaceExtension=
 while [ $# -ne 0 ]
@@ -84,6 +91,13 @@ do
 	--help|-h|-\?)		shift; printLongUsage "$0"; exit 0;;
 	--field-separator|-F)	awkArgs+=("$1" "$2"); shift; shift;;
 	--unbuffered|-u)	shift; isBuffered=;;
+	--coprocess-error|-E)	shift
+				onCoprocError="$1"; shift
+				case "$onCoprocError" in
+				    abort|ignore)  ;;
+				    *)  { printf 'ERROR: Invalid value for --coprocess-error: %s\n' "$onCoprocError"; echo; printShortUsage "$0"; } >&2; exit 2;;
+				esac
+				;;
 	-i|--in-place)		isInPlace=t; shift;;
 	-i?*|--in-place=*)	isInPlace=t; inPlaceExtension="${1#-i}"; inPlaceExtension="${inPlaceExtension#--in-place=}"; shift;;
 	?(-)+([0-9]))		fields+=("$1")
@@ -122,11 +136,21 @@ exec "${awkCall[@]}" "${awkArgs[@]}" \
     -v "fieldList=${fields[*]//\\/\\\\}" \
     -v "coprocList=${coprocs[*]//\\/\\\\}" \
     -v "coprocWantingPtyList=${coprocsWantingPty[*]//\\/\\\\}" \
+    -v "onCoprocError=$onCoprocError" \
 '
 function pipeThrough(input, coproc,      result)
 {
     print input |& coproc
-    coproc |& getline result
+    if ((coproc |& getline result) <= 0) {
+	if (onCoprocError == "abort") {
+	    exit 1
+	} else if (onCoprocError == "ignore") {
+	    return ""
+	} else {
+	    printf("ASSERT: Invalid onCoprocError: %s\n", onCoprocError) > "/dev/stderr"
+	    exit 3
+	}
+    }
     return result
 }
 function evaluateExpression(fieldNr, fieldNrSequence)
