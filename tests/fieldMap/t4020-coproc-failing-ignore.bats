@@ -2,7 +2,7 @@
 
 load coproc
 
-@test "uppercasing first field failing after first line yields empty fields" {
+@test "ignoring coproc failure on uppercasing first field failing after first line yields empty fields" {
     run fieldMap -F $'\t' 1 "|$uppercaseCommand -e 'q 42'" "${BATS_TEST_DIRNAME}/tabbed.txt"
 
     [ $status -eq 0 ]
@@ -12,7 +12,7 @@ load coproc
 			last" ]
 }
 
-@test "coproc command that does not exist yields empty fields" {
+@test "ignoring coproc failure on coproc command that does not exist yields empty fields" {
     runStdout fieldMap -F $'\t' 1 '|doesNotExist' "${BATS_TEST_DIRNAME}/tabbed.txt"
 
     [ $status -eq 0 ]
@@ -21,7 +21,7 @@ load coproc
 			
 			last" ]
 }
-@test "coproc command that does not exist prints shell error to stderr" {
+@test "ignoring coproc failure on coproc command that does not exist prints shell error to stderr" {
     runStderr fieldMap -F $'\t' 1 '|doesNotExist' "${BATS_TEST_DIRNAME}/tabbed.txt"
 
     [ $status -eq 0 ]
