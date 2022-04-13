@@ -4,7 +4,7 @@ shopt -qs extglob
 printShortUsage()
 {
     local awkFieldAndFormat='([-]N [[-f|--format] FORMAT]) [[-]N ...]'
-    printf 'Usage: cat FILE [...] | %q %s\n' "$(basename "$1")" "[-F|--field-separator FS] [-u|--unbuffered] $awkFieldAndFormat"
+    printf 'Usage: cat FILE [...] | %q %s\n' "$(basename "$1")" "[-F|--field-separator FS] [-u|--unbuffered] [-E|--date-error abort|ignore [--date-error-value TEXT]] $awkFieldAndFormat"
     echo
     printf 'Usage: %q %s\n' "$(basename "$1")" "... [-u|--utc|--universal] [-i[SUFFIX]|--in-place[=SUFFIX]] $awkFieldAndFormat -- [FILE ...] [-?|-h|--help]"
 }
@@ -33,6 +33,15 @@ HELPDESCRIPTION
 			    Applies to all following FORMATs.
     --field-separator|-F FS Use FS as the input field separator (as with AWK).
     --unbuffered|-u	    Immediately output each read line.
+    --date-error|-E abort   When a date cannot be normalized (likely due to
+			    invalid syntax), abort the entire processing of
+			    FILE(s). This is the default behavior.
+    --date-error|-E ignore  When a date cannot be normalized, keep the original
+			    date as-is.
+    --date-error-value TEXT When a date cannot be normalized, use static TEXT
+			    for the mapped field instead.
+			    The --date-error* options apply to all following
+			    FORMATs.
     --in-place[=SUFFIX]|-i[SUFFIX]
 			    Edit FILE(s) in place (makes backup if SUFFIX
 			    supplied).
