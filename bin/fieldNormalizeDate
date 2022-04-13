@@ -76,6 +76,8 @@ do
 	--in-place=*)	fieldMapArgs+=("$1"); shift;;
 	--@(field-separator|in-place))
 			fieldMapArgs+=("$1" "$2"); shift; shift;;
+	--date-error|-E)
+			shift; shift;;
 	?(-)+([0-9]))	field="$1"; shift
 			quotedFormat=
 			case "$1" in
@@ -85,7 +87,8 @@ do
 			    *)		    quotedFormat="$(posixQuote "$1")"; shift;;
 			esac
 			quotedDateArgs=''; [ ${#dateArgs[@]} -eq 0 ] || quotedDateArgs="$(posixQuote "${dateArgs[@]}")"
-			quotedMemoizeCommand="$(posixQuote "date $quotedDateArgs --date {} ${quotedFormat:++}${quotedFormat} || printf %s {}")"
+			#quotedMemoizeCommand="$(posixQuote "date $quotedDateArgs --date {} ${quotedFormat:++}${quotedFormat} || printf %s {}")"
+			quotedMemoizeCommand="$(posixQuote "date $quotedDateArgs --date {}${quotedFormat:+ +}${quotedFormat}")"
 
 			# Note: Could almost use "date --file=-" directly,
 			# without the memoization. But there would be no output
