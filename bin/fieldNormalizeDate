@@ -43,14 +43,13 @@ HELPDESCRIPTION
 			    date as-is.
     --date-error-value TEXT When a date cannot be normalized, use static TEXT
 			    for the mapped field instead.
-			    The --date-error* options apply to all following
-			    FORMATs.
+    The --date-error* options apply to all following FORMATs.
     --in-place[=SUFFIX]|-i[SUFFIX]
 			    Edit FILE(s) in place (makes backup if SUFFIX
 			    supplied).
 EXIT STATUS:
     0	Complete success.
-    1	AWK processing error.
+    1	date / AWK processing error.
     2	Bad invocation, wrong or missing command-line arguments.
     3	Internal error or failed assertion.
 HELPTEXT
