@@ -112,7 +112,17 @@ do
 			    # output to standard out in case of an invalid date
 			    # (and the AWK mapping would hang), redirect the
 			    # error message to standard out.
-			    fieldMappings+=("$field" "|stdbuf -oL date --file=- $quotedDateArgs ${quotedFormat:+ +}${quotedFormat} 2>&1")
+			    if type -t stdbuf >/dev/null; then
+				# Prefer stdbuf to change date to per-line
+				# output buffering (so that the coprocessing
+				# doesn't hang).
+				unbufferedCoproc='|stdbuf -oL '
+			    else
+				# Fall back to starting the coprocess in a
+				# pseudo-tty.
+				unbufferedCoproc='+|'
+			    fi
+			    fieldMappings+=("$field" "${unbufferedCoproc}date --file=- $quotedDateArgs ${quotedFormat:+ +}${quotedFormat} 2>&1")
 			else
 			    quotedMemoizeCommand="$(posixQuote "date $quotedDateArgs --date {}${quotedFormat:+ +}${quotedFormat}${dateErrorHandler:+ || }${dateErrorHandler}")"
 			    fieldMappings+=("$field" "|memoizeLines --command $quotedMemoizeCommand")
