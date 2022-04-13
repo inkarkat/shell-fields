@@ -4,7 +4,7 @@ shopt -qs extglob
 printShortUsage()
 {
     local awkFieldAndFormat='([-]N [[-f|--format] FORMAT]) [[-]N ...]'
-    printf 'Usage: cat FILE [...] | %q %s\n' "$(basename "$1")" "[-F|--field-separator FS] [-u|--unbuffered] [-E|--date-error abort|ignore [--date-error-value TEXT]] $awkFieldAndFormat"
+    printf 'Usage: cat FILE [...] | %q %s\n' "$(basename "$1")" "[-F|--field-separator FS] [-u|--unbuffered] [-E|--date-error abort|ignore|--date-error-value TEXT] $awkFieldAndFormat"
     echo
     printf 'Usage: %q %s\n' "$(basename "$1")" "... [-u|--utc|--universal] [-i[SUFFIX]|--in-place[=SUFFIX]] $awkFieldAndFormat -- [FILE ...] [-?|-h|--help]"
 }
@@ -88,6 +88,8 @@ do
 			esac
 			shift
 			;;
+	--date-error-value)
+			shift; dateErrorHandler="printf %s $(posixQuote "$1")"; shift;;
 	?(-)+([0-9]))	field="$1"; shift
 			quotedFormat=
 			case "$1" in
