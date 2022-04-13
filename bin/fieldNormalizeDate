@@ -77,7 +77,13 @@ do
 	--@(field-separator|in-place))
 			fieldMapArgs+=("$1" "$2"); shift; shift;;
 	--date-error|-E)
-			shift; shift;;
+			shift
+			case "$1" in
+			    abort)  ;;
+			    *)  { printf 'ERROR: Invalid value for --date-error: %s\n' "$1"; echo; printShortUsage "$0"; } >&2; exit 2;;
+			esac
+			shift
+			;;
 	?(-)+([0-9]))	field="$1"; shift
 			quotedFormat=
 			case "$1" in
