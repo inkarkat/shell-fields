@@ -19,3 +19,10 @@
     [ $status -eq 0 ]
     [ "${lines[0]%% *}" != 'Usage:' ]
 }
+
+@test "invalid --date-error prints an error message" {
+    LC_ALL=C run fieldNormalizeDate -F $'\t' --date-error doesNotExist 1 -- "${BATS_TEST_DIRNAME}/tabbed.txt"
+    [ $status -eq 2 ]
+    [ "${lines[0]}" = 'ERROR: Invalid value for --date-error: doesNotExist' ]
+    [ "${lines[2]%% *}" = "Usage:" ]
+}

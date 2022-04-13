@@ -4,7 +4,7 @@ shopt -qs extglob
 printShortUsage()
 {
     local awkFieldAndFormat='([-]N [[-f|--format] FORMAT]) [[-]N ...]'
-    printf 'Usage: cat FILE [...] | %q %s\n' "$(basename "$1")" "[-F|--field-separator FS] [-u|--unbuffered] $awkFieldAndFormat"
+    printf 'Usage: cat FILE [...] | %q %s\n' "$(basename "$1")" "[-F|--field-separator FS] [-u|--unbuffered] [-E|--date-error abort|message|ignore|--date-error-value TEXT] $awkFieldAndFormat"
     echo
     printf 'Usage: %q %s\n' "$(basename "$1")" "... [-u|--utc|--universal] [-i[SUFFIX]|--in-place[=SUFFIX]] $awkFieldAndFormat -- [FILE ...] [-?|-h|--help]"
 }
@@ -33,12 +33,23 @@ HELPDESCRIPTION
 			    Applies to all following FORMATs.
     --field-separator|-F FS Use FS as the input field separator (as with AWK).
     --unbuffered|-u	    Immediately output each read line.
+    --date-error|-E abort   When a date cannot be normalized (likely due to
+			    invalid syntax), abort the entire processing of
+			    FILE(s). This is the default behavior.
+    --date-error|-E message When a date cannot be normalized (likely due to
+			    invalid syntax), replace the field with date's error
+			    message. Note: This error handling performs best.
+    --date-error|-E ignore  When a date cannot be normalized, keep the original
+			    date as-is.
+    --date-error-value TEXT When a date cannot be normalized, use static TEXT
+			    for the mapped field instead.
+    The --date-error* options apply to all following FORMATs.
     --in-place[=SUFFIX]|-i[SUFFIX]
 			    Edit FILE(s) in place (makes backup if SUFFIX
 			    supplied).
 EXIT STATUS:
     0	Complete success.
-    1	AWK processing error.
+    1	date / AWK processing error.
     2	Bad invocation, wrong or missing command-line arguments.
     3	Internal error or failed assertion.
 HELPTEXT
@@ -49,9 +60,11 @@ posixQuote()
     printf '%q ' "$@" | changeQuoting --posix
 }
 
+readonly DATE_ERROR_HANDLER_REDIR_MESSAGE='redir'
 typeset -a fieldMapArgs=()
 typeset -a fieldMappings=()
 typeset -a dateArgs=()
+dateErrorHandler=
 while [ $# -ne 0 ]
 do
     case "$1" in
@@ -67,6 +80,21 @@ do
 	--in-place=*)	fieldMapArgs+=("$1"); shift;;
 	--@(field-separator|in-place))
 			fieldMapArgs+=("$1" "$2"); shift; shift;;
+	--date-error|-E)
+			shift
+			case "$1" in
+			    abort)
+				dateErrorHandler='';;
+			    ignore)
+				dateErrorHandler='printf %s {}';;
+			    message)
+				dateErrorHandler="$DATE_ERROR_HANDLER_REDIR_MESSAGE";;
+			    *)  { printf 'ERROR: Invalid value for --date-error: %s\n' "$1"; echo; printShortUsage "$0"; } >&2; exit 2;;
+			esac
+			shift
+			;;
+	--date-error-value)
+			shift; dateErrorHandler="printf %s $(posixQuote "$1")"; shift;;
 	?(-)+([0-9]))	field="$1"; shift
 			quotedFormat=
 			case "$1" in
@@ -76,23 +104,33 @@ do
 			    *)		    quotedFormat="$(posixQuote "$1")"; shift;;
 			esac
 			quotedDateArgs=''; [ ${#dateArgs[@]} -eq 0 ] || quotedDateArgs="$(posixQuote "${dateArgs[@]}")"
-			quotedMemoizeCommand="$(posixQuote "date $quotedDateArgs --date {} ${quotedFormat:++}${quotedFormat} || printf %s {}")"
 
-			# Note: Could almost use "date --file=-" directly,
-			# without the memoization. But there would be no output
-			# to standard out in case of an invalid date, so the AWK
-			# mapping would hang. It could be worked around by
-			# redirecting the error message to standard out, but
-			# then we'd still have to use an sed stage to cut out
-			# the (locale-dependent) error message around the
-			# original invalid date.
+			if [ "$dateErrorHandler" = "$DATE_ERROR_HANDLER_REDIR_MESSAGE" ]; then
+			    # Here, "date --file=-" can be used directly,
+			    # without the memoization. As there would be no
+			    # output to standard out in case of an invalid date
+			    # (and the AWK mapping would hang), redirect the
+			    # error message to standard out.
+			    if type -t stdbuf >/dev/null; then
+				# Prefer stdbuf to change date to per-line
+				# output buffering (so that the coprocessing
+				# doesn't hang).
+				unbufferedCoproc='|stdbuf -oL '
+			    else
+				# Fall back to starting the coprocess in a
+				# pseudo-tty.
+				unbufferedCoproc='+|'
+			    fi
+			    fieldMappings+=("$field" "${unbufferedCoproc}date --file=- $quotedDateArgs ${quotedFormat:+ +}${quotedFormat} 2>&1")
+			else
+			    quotedMemoizeCommand="$(posixQuote "date $quotedDateArgs --date {}${quotedFormat:+ +}${quotedFormat}${dateErrorHandler:+ || }${dateErrorHandler}")"
+			    fieldMappings+=("$field" "|memoizeLines --command $quotedMemoizeCommand")
 
-			fieldMappings+=("$field" "|memoizeLines --command $quotedMemoizeCommand")
-
-			# Note: Could use succeedsOrRetryArg, but that's
-			# probably overkill. On the other hand, it would
-			# eliminate the second round of POSIX-quoting.
-			#fieldMappings+=("$field" "|MEMOIZELINES_ARG_MARKER=@@ memoizeLines succeedsOrRetryArg date $quotedDateArgs --date {} ${quotedFormat:++}${quotedFormat} @@")
+			    # Note: Could use succeedsOrRetryArg, but that's
+			    # probably overkill. On the other hand, it would
+			    # eliminate the second round of POSIX-quoting.
+			    #fieldMappings+=("$field" "|MEMOIZELINES_ARG_MARKER=@@ memoizeLines succeedsOrRetryArg date $quotedDateArgs --date {} ${quotedFormat:++}${quotedFormat} @@")
+			fi
 			;;
 	--)		fieldMapArgs+=("$1"); shift; break;;
 	-*)		{ echo "ERROR: Unknown option \"$1\"!"; echo; printUsage "$0"; } >&2; exit 2;;
