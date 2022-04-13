@@ -15,7 +15,7 @@ load fixture
 }
 
 @test "invalid date in first field aborts processing with --date-error abort and prints date error message" {
-    LC_ALL=C run fieldNormalizeDate -F $'\t' --date-error abort 1 -- "${BATS_TEST_DIRNAME}/bad.txt"
+    LC_ALL=C runStderr fieldNormalizeDate -F $'\t' --date-error abort 1 -- "${BATS_TEST_DIRNAME}/bad.txt"
     [ $status -eq 1 ]
     [ "$output" = "date: invalid date '01-01-1000'" ]
 }

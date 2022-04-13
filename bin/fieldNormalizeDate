@@ -61,6 +61,7 @@ posixQuote()
 typeset -a fieldMapArgs=()
 typeset -a fieldMappings=()
 typeset -a dateArgs=()
+dateErrorHandler=
 while [ $# -ne 0 ]
 do
     case "$1" in
@@ -79,7 +80,10 @@ do
 	--date-error|-E)
 			shift
 			case "$1" in
-			    abort)  ;;
+			    abort)
+				dateErrorHandler='';;
+			    ignore)
+				dateErrorHandler='printf %s {}';;
 			    *)  { printf 'ERROR: Invalid value for --date-error: %s\n' "$1"; echo; printShortUsage "$0"; } >&2; exit 2;;
 			esac
 			shift
@@ -93,8 +97,7 @@ do
 			    *)		    quotedFormat="$(posixQuote "$1")"; shift;;
 			esac
 			quotedDateArgs=''; [ ${#dateArgs[@]} -eq 0 ] || quotedDateArgs="$(posixQuote "${dateArgs[@]}")"
-			#quotedMemoizeCommand="$(posixQuote "date $quotedDateArgs --date {} ${quotedFormat:++}${quotedFormat} || printf %s {}")"
-			quotedMemoizeCommand="$(posixQuote "date $quotedDateArgs --date {}${quotedFormat:+ +}${quotedFormat}")"
+			quotedMemoizeCommand="$(posixQuote "date $quotedDateArgs --date {}${quotedFormat:+ +}${quotedFormat}${dateErrorHandler:+ || }${dateErrorHandler}")"
 
 			# Note: Could almost use "date --file=-" directly,
 			# without the memoization. But there would be no output
