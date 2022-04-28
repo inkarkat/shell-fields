@@ -31,7 +31,6 @@ baz		third" ]
 }
 
 @test "too large negative field (by many) is treated as empty" {
-skip
     run field --input "${BATS_TEST_DIRNAME}/tabbed.txt" -F $'\t' 1 -10 2
     [ $status -eq 0 ]
     [ "$output" = "foo		first

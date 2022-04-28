@@ -31,7 +31,6 @@ third	333" ]
 }
 
 @test "removing too large negative field (by many) is ignored" {
-skip
     run field --input "${BATS_TEST_DIRNAME}/tabbed.txt" -F $'\t' --remove 1 -10 4
     [ "$output" = "first	100
 second	201
