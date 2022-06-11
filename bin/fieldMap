@@ -148,8 +148,8 @@ do
 	*)			break;;
     esac
 done
-if [ ${#fields[@]} -eq 0 ]; then
-    echo 'ERROR: No [-]N AWK-EXPR passed.'
+if [ ${#filterCode[@]} -eq 0 -a ${#expressionCode[@]} -eq 0 ]; then
+    echo 'ERROR: No AWK-EXPR passed (for filtering or mapping).'
     echo
     printUsage "$0"
     exit 2

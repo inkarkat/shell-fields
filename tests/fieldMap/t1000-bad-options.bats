@@ -7,10 +7,10 @@
     [ "${lines[2]%% *}" = "Usage:" ]
 }
 
-@test "no N prints an error message" {
+@test "no N and no --filter prints an error message" {
     run fieldMap "${BATS_TEST_DIRNAME}/tabbed.txt"
     [ $status -eq 2 ]
-    [ "${lines[0]}" = "ERROR: No [-]N AWK-EXPR passed." ]
+    [ "${lines[0]}" = "ERROR: No AWK-EXPR passed (for filtering or mapping)." ]
     [ "${lines[2]%% *}" = "Usage:" ]
 }
 

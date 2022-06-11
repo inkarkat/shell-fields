@@ -8,3 +8,12 @@
 0			last
 0" ]
 }
+
+@test "only filtering empty lines" {
+    run fieldMap -F $'\t' --filter '$0 ~ /\S/' "${BATS_TEST_DIRNAME}/tabbed.txt"
+    [ $status -eq 0 ]
+    [ "$output" = "foo	first	100	A Here
+bar	no4	201
+bzz			last
+eof" ]
+}
