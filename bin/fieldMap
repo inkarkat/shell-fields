@@ -84,6 +84,16 @@ HELPTEXT
     printf '%q %s\n' "$(basename "$1")" "-1 '\$fieldNr \" (\" NF \")\"' -- /tmp/foobar"
 }
 
+parseExpression()
+{
+    awkExpr="${1:?}"; shift
+    if [[ "$awkExpr" =~ ^([^|]*[^|+]|[^|+]?)(\+?)\|(.*)$ ]]; then
+	coprocs+=("${BASH_REMATCH[3]}")
+	[ "${BASH_REMATCH[2]}" = '+' ] && coprocsWantingPty+=("${BASH_REMATCH[3]}")
+	awkSourceExpr="${BASH_REMATCH[1]}"; [ -n "$awkSourceExpr" ] || awkSourceExpr='$fieldNr'
+	printf -v awkExpr 'pipeThrough(%s, coprocs[%d])' "$awkSourceExpr" "${#coprocs[@]}"
+    fi
+}
 
 isBuffered=t
 typeset -a awkCall=(awk)
@@ -116,14 +126,7 @@ do
 	-i|--in-place)		isInPlace=t; shift;;
 	-i?*|--in-place=*)	isInPlace=t; inPlaceExtension="${1#-i}"; inPlaceExtension="${inPlaceExtension#--in-place=}"; shift;;
 	?(-)+([0-9]))		fields+=("$1")
-				awkExpr="$2"
-				if [[ "$awkExpr" =~ ^([^|]*[^|+]|[^|+]?)(\+?)\|(.*)$ ]]; then
-				    coprocs+=("${BASH_REMATCH[3]}")
-				    [ "${BASH_REMATCH[2]}" = '+' ] && coprocsWantingPty+=("${BASH_REMATCH[3]}")
-				    awkSourceExpr="${BASH_REMATCH[1]}"; [ -n "$awkSourceExpr" ] || awkSourceExpr='$fieldNr'
-				    printf -v awkExpr 'pipeThrough(%s, coprocs[%d])' "$awkSourceExpr" "${#coprocs[@]}"
-				fi
-
+				parseExpression "$2"
 				case "$1" in
 				    -*)	expressionCode+=("if (fieldNr == NF - ${1#-} + 1 && --fieldNrSequence == 0) return $awkExpr");;
 				    *)	expressionCode+=("if (fieldNr == $1 && --fieldNrSequence == 0) return $awkExpr");;
