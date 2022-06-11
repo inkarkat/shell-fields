@@ -3,10 +3,11 @@ shopt -qs extglob
 
 printShortUsage()
 {
-    local awkFieldAndExpr='[-]N (AWK-EXPR | "[AWK-EXPR][+]|COMMAND") [[-]N ...]'
+    local awkExpr='(AWK-EXPR | "[AWK-EXPR][+]|COMMAND")'
+    local awkFieldAndExpr="[-]N $awkExpr [[-]N ...]"
     # Note: short followed by long option; if the user knows the short one, she can
     # skim the long one.
-    printf 'Usage: cat FILE [...] | %q %s\n' "$(basename "$1")" "[-F|--field-separator FS] [-u|--unbuffered] [-E|--coprocess-error abort|ignore [--coprocess-error-value TEXT]|restart] [-f|--function 'FUNCTION-NAME { ... }' [-f ...]] $awkFieldAndExpr"
+    printf 'Usage: cat FILE [...] | %q %s\n' "$(basename "$1")" "[-F|--field-separator FS] [-u|--unbuffered] [-E|--coprocess-error abort|ignore [--coprocess-error-value TEXT]|restart] [-f|--function 'FUNCTION-NAME { ... }' [-f ...]] [--filter $awkExpr [-x|--filter ...]] $awkFieldAndExpr"
     echo
     printf 'Usage: %q %s\n' "$(basename "$1")" "... [-i[SUFFIX]|--in-place[=SUFFIX]] $awkFieldAndExpr [--] [FILE ...] [-?|-h|--help]"
 }
@@ -70,6 +71,10 @@ HELPDESCRIPTION
     --function|-f 'FUNCTION-NAME { ... }'
 			    Define AWK FUNCTION-NAME (for use in AWK-EXPR; when
 			    a simple expression won't do).
+    --filter|-x (AWK-EXPR | "[AWK-EXPR][+]|COMMAND")
+			    Evaluate like a field mapping (but fieldNr is not
+			    defined) and drop the entire line if the result is a
+			    falsy value.
     --in-place[=SUFFIX]|-i[SUFFIX]
 			    Edit FILE(s) in place (makes backup if SUFFIX
 			    supplied).
@@ -84,12 +89,24 @@ HELPTEXT
     printf '%q %s\n' "$(basename "$1")" "-1 '\$fieldNr \" (\" NF \")\"' -- /tmp/foobar"
 }
 
+parseExpression()
+{
+    local defaultSourceExpr="${1?}"; shift
+    awkExpr="${1:?}"; shift
+    if [[ "$awkExpr" =~ ^([^|]*[^|+]|[^|+]?)(\+?)\|(.*)$ ]]; then
+	coprocs+=("${BASH_REMATCH[3]}")
+	[ "${BASH_REMATCH[2]}" = '+' ] && coprocsWantingPty+=("${BASH_REMATCH[3]}")
+	awkSourceExpr="${BASH_REMATCH[1]:-$defaultSourceExpr}"
+	printf -v awkExpr 'pipeThrough(%s, coprocs[%d])' "$awkSourceExpr" "${#coprocs[@]}"
+    fi
+}
 
 isBuffered=t
 typeset -a awkCall=(awk)
 typeset -a awkArgs=()
 typeset -a fields=()
 typeset -a expressionCode=()
+typeset -a filterCode=()
 typeset -a coprocs=()
 typeset -a coprocsWantingPty=()
 onCoprocError=abort
@@ -113,17 +130,14 @@ do
 	--coprocess-error-value)
 				shift; coprocErrorValue="$1"; shift;;
 	--function|-f)		shift; awkFunctions+=("function $1"); shift;;
+	--filter|-x)		shift
+				parseExpression '$0' "$1"; shift
+				filterCode+=("if (! ($awkExpr)) next")
+				;;
 	-i|--in-place)		isInPlace=t; shift;;
 	-i?*|--in-place=*)	isInPlace=t; inPlaceExtension="${1#-i}"; inPlaceExtension="${inPlaceExtension#--in-place=}"; shift;;
 	?(-)+([0-9]))		fields+=("$1")
-				awkExpr="$2"
-				if [[ "$awkExpr" =~ ^([^|]*[^|+]|[^|+]?)(\+?)\|(.*)$ ]]; then
-				    coprocs+=("${BASH_REMATCH[3]}")
-				    [ "${BASH_REMATCH[2]}" = '+' ] && coprocsWantingPty+=("${BASH_REMATCH[3]}")
-				    awkSourceExpr="${BASH_REMATCH[1]}"; [ -n "$awkSourceExpr" ] || awkSourceExpr='$fieldNr'
-				    printf -v awkExpr 'pipeThrough(%s, coprocs[%d])' "$awkSourceExpr" "${#coprocs[@]}"
-				fi
-
+				parseExpression '$fieldNr' "$2"
 				case "$1" in
 				    -*)	expressionCode+=("if (fieldNr == NF - ${1#-} + 1 && --fieldNrSequence == 0) return $awkExpr");;
 				    *)	expressionCode+=("if (fieldNr == $1 && --fieldNrSequence == 0) return $awkExpr");;
@@ -135,8 +149,8 @@ do
 	*)			break;;
     esac
 done
-if [ ${#fields[@]} -eq 0 ]; then
-    echo 'ERROR: No [-]N AWK-EXPR passed.'
+if [ ${#filterCode[@]} -eq 0 -a ${#expressionCode[@]} -eq 0 ]; then
+    echo 'ERROR: No AWK-EXPR passed (for filtering or mapping).'
     echo
     printUsage "$0"
     exit 2
@@ -220,6 +234,7 @@ NR == 1 {
     }
 }
 {
+'"${filterCode[*]}"'
     delete fieldNrSequences
     for (n = 1; n <= N; ++n) {
 	fieldNr = getFieldNr(fields[n])
