@@ -20,3 +20,11 @@ readonly filterNonO0Command="$sedCommand -e 's/.*[0oO].*/1/' -e t -e 's/.*/0/'"
 bar	no4	201
 eof" ]
 }
+
+@test "filtering lines where the first field has no 0 or o via coproc" {
+    run fieldMap -F $'\t' --filter "\$1|$filterNonO0Command" "${BATS_TEST_DIRNAME}/tabbed.txt"
+
+    [ $status -eq 0 ]
+    [ "$output" = "foo	first	100	A Here
+eof" ]
+}
