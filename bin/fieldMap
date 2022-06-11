@@ -6,7 +6,7 @@ printShortUsage()
     local awkFieldAndExpr='[-]N (AWK-EXPR | "[AWK-EXPR][+]|COMMAND") [[-]N ...]'
     # Note: short followed by long option; if the user knows the short one, she can
     # skim the long one.
-    printf 'Usage: cat FILE [...] | %q %s\n' "$(basename "$1")" "[-F|--field-separator FS] [-u|--unbuffered] [-E|--coprocess-error abort|ignore [--coprocess-error-value TEXT]|restart] $awkFieldAndExpr"
+    printf 'Usage: cat FILE [...] | %q %s\n' "$(basename "$1")" "[-F|--field-separator FS] [-u|--unbuffered] [-E|--coprocess-error abort|ignore [--coprocess-error-value TEXT]|restart] [-f|--function 'FUNCTION-NAME { ... }' [-f ...]] $awkFieldAndExpr"
     echo
     printf 'Usage: %q %s\n' "$(basename "$1")" "... [-i[SUFFIX]|--in-place[=SUFFIX]] $awkFieldAndExpr [--] [FILE ...] [-?|-h|--help]"
 }
@@ -67,6 +67,9 @@ HELPDESCRIPTION
 			    When COMMAND fails, the field will be empty /
 			    contain TEXT, but relaunch the COMMAND for the
 			    following field, and try to resume processing.
+    --function|-f 'FUNCTION-NAME { ... }'
+			    Define AWK FUNCTION-NAME (for use in AWK-EXPR; when
+			    a simple expression won't do).
     --in-place[=SUFFIX]|-i[SUFFIX]
 			    Edit FILE(s) in place (makes backup if SUFFIX
 			    supplied).
@@ -91,6 +94,7 @@ typeset -a coprocs=()
 typeset -a coprocsWantingPty=()
 onCoprocError=abort
 coprocErrorValue=
+typeset -a awkFunctions=()
 isInPlace=
 inPlaceExtension=
 while [ $# -ne 0 ]
@@ -108,6 +112,7 @@ do
 				;;
 	--coprocess-error-value)
 				shift; coprocErrorValue="$1"; shift;;
+	--function|-f)		shift; awkFunctions+=("function $1"); shift;;
 	-i|--in-place)		isInPlace=t; shift;;
 	-i?*|--in-place=*)	isInPlace=t; inPlaceExtension="${1#-i}"; inPlaceExtension="${inPlaceExtension#--in-place=}"; shift;;
 	?(-)+([0-9]))		fields+=("$1")
@@ -148,7 +153,7 @@ exec "${awkCall[@]}" "${awkArgs[@]}" \
     -v "coprocWantingPtyList=${coprocsWantingPty[*]//\\/\\\\}" \
     -v "onCoprocError=$onCoprocError" \
     -v "coprocErrorValue=${coprocErrorValue//\\/\\\\}" \
-'
+"${awkFunctions[*]}"'
 function pipeThrough(input, coproc,      result)
 {
     print input |& coproc
