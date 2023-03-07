@@ -5,7 +5,7 @@ printShortUsage()
 {
     # Note: short followed by long option; if the user knows the short one, she can
     # skim the long one.
-    printf 'Usage: cat FILE [...] | %q %s\n' "$(basename "$1")" '[-F|--field-separator FS] [-u|--unbuffered] [-s|--skip-value VAL] [-]N AWK-EXPR [...]'
+    printf 'Usage: cat FILE [...] | %q %s\n' "$(basename "$1")" '[-F|--field-separator FS] [-v|--assign var=val [-v ...]] [-u|--unbuffered] [-s|--skip-value VAL] [-]N AWK-EXPR [...]'
     echo
     printf 'Usage: %q %s\n' "$(basename "$1")" '... [-i[SUFFIX]|--in-place[=SUFFIX]] [-]N AWK-EXPR [...] [--] [FILE ...] [-?|-h|--help]'
 }
@@ -36,6 +36,8 @@ HELPDESCRIPTION
 			    used to duplicate the original field), or
 			    '\$1 "(" length(\$1) ")"')
     --field-separator|-F FS Use FS as the input field separator (as with AWK).
+    --assign|-v var=val	    Assign the value val to the variable var; these can
+			    then be used in AWK-EXPR.
     --unbuffered|-u	    Immediately output each read line.
     --skip-value|-s VAL	    Do not add the field when AWK-EXPR returns VAL.
     --in-place[=SUFFIX]|-i[SUFFIX]
@@ -56,6 +58,7 @@ HELPTEXT
 isBuffered=t
 typeset -a awkCall=(awk)
 typeset -a awkArgs=()
+typeset -a awkVariableAssignments=()
 typeset -a fields=()
 typeset -a expressionCode=()
 unset skipValue
@@ -66,6 +69,7 @@ do
     case "$1" in
 	--help|-h|-\?)		shift; printLongUsage "$0"; exit 0;;
 	--field-separator|-F)	awkArgs+=("$1" "$2"); shift; shift;;
+	--assign|-v)		awkVariableAssignments+=("$1" "${2?}"); shift; shift;;
 	--unbuffered|-u)	shift; isBuffered=;;
 	--skip-value|-s)	shift; skipValue="$1"; shift;;
 	-i|--in-place)		isInPlace=t; shift;;
@@ -98,6 +102,7 @@ exec "${awkCall[@]}" "${awkArgs[@]}" \
     -v "fieldList=${fields[*]//\\/\\\\}" \
     -v "hasSkipValue=${skipValue+t}" \
     -v "skipValue=${skipValue//\\/\\\\}" \
+    "${awkVariableAssignments[@]}" \
 '
 function evaluateExpression(fieldNr)
 {
