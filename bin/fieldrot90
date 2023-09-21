@@ -1,0 +1,54 @@
+#!/usr/bin/gawk -f
+
+BEGIN {
+    if (ARGV[1] ~ /^(--(help|man|usage)|-[Hh?])$/) {
+	print "Rotates field columns and rows clockwise (counter-clockwise with --reverse)"
+	print "by 90 degrees."
+	print ""
+	print "Usage: fieldrot90 [--reverse] FILE [...] [-?|-H|--man|--usage]"
+	print "Usage: cat FILE [...] | fieldrot90 [--reverse]"
+	exit
+    } else if (ARGV[1] == "--reverse") {
+	isReverse = 1
+	delete ARGV[1]
+    }
+}
+NR == 1 {
+    # Use FS as output separator if it is not a regular expression.
+    firstTwoFields = $1 FS $2
+    if (NF < 2 || substr($0, 1, length(firstTwoFields)) == firstTwoFields) {
+	OFS = FS
+    } else if (FS == " " && (substr($0, 1, length(firstTwoFields)) == $1 "\t" $2)) {
+	OFS = "\t"
+    }
+}
+{
+    line[NR][0] = ""
+    fieldNum[NR] = split($0, line[NR])
+    maxN = (fieldNum[NR] > maxN ? fieldNum[NR] : maxN)
+}
+END {
+    # i turns original columns into fields
+    # j turns original lines into characters
+    if (isReverse) {
+	for (i = maxN; i > 0; --i) {
+	    rotatedLine = ""
+	    sep = ""
+	    for (j = 1; j <= NR; ++j) {
+		rotatedLine = rotatedLine (fieldNum[j] >= i ? sep line[j][i] : "")
+		sep = OFS
+	    }
+	    print rotatedLine
+	}
+    } else {
+	for (i = 1; i <= maxN; ++i) {
+	    rotatedLine = ""
+	    sep = ""
+	    for (j = NR; j > 0; --j) {
+		rotatedLine = rotatedLine (fieldNum[j] >= i ? sep line[j][i] : "")
+		sep = OFS
+	    }
+	    print rotatedLine
+	}
+    }
+}
