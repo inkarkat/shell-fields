@@ -4,12 +4,12 @@ shopt -qs extglob
 printShortUsage()
 {
     local awkExpr='(AWK-EXPR | "[AWK-EXPR][+]|COMMAND")'
-    local awkFieldAndExpr="[-]N $awkExpr [[-]N ...]"
+    local awkFilterOrFieldAndExpr="-x|--filter $awkExpr | [-]N $awkExpr"
     # Note: short followed by long option; if the user knows the short one, she can
     # skim the long one.
-    printf 'Usage: cat FILE [...] | %q %s\n' "$(basename "$1")" "[-F|--field-separator FS] [-v|--assign var=val [-v ...]] [-u|--unbuffered] [-E|--coprocess-error abort|ignore [--coprocess-error-value TEXT]|restart] [-f|--function 'FUNCTION-NAME { ... }' [-f ...]] [--filter $awkExpr [-x|--filter ...]] $awkFieldAndExpr"
+    printf 'Usage: cat FILE [...] | %q %s\n' "$(basename "$1")" "[-F|--field-separator FS] [-v|--assign var=val [-v ...]] [-u|--unbuffered] [-E|--coprocess-error abort|ignore [--coprocess-error-value TEXT]|restart] [-f|--function 'FUNCTION-NAME { ... }' [-f ...]] ($awkFilterOrFieldAndExpr) [...]"
     echo
-    printf 'Usage: %q %s\n' "$(basename "$1")" "... [-i[SUFFIX]|--in-place[=SUFFIX]] $awkFieldAndExpr [--] [FILE ...] [-?|-h|--help]"
+    printf 'Usage: %q %s\n' "$(basename "$1")" "... [-i[SUFFIX]|--in-place[=SUFFIX]] ($awkFilterOrFieldAndExpr) [...] [--] [FILE ...] [-?|-h|--help]"
 }
 printUsage()
 {
