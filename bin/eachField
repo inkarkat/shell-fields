@@ -6,7 +6,7 @@ fileMarker="$EACHFIELD_FILE_MARKER"; unset EACHFIELD_FILE_MARKER
 
 printShortUsage()
 {
-    printf 'Usage: cat FILE [...] | %q %s\n' "$(basename "$1")" "[-F|--field-separator FS] [(--pass | -c|--command \"COMMANDLINE\" [...] | --exec SIMPLECOMMAND [...] ${fileMarker:+[}${fileMarker}${fileMarker:+] [...]} ;) [-]N[,[-]M,...] [...]] [...]"
+    printf 'Usage: cat FILE [...] | %q %s\n' "$(basename "$1")" "[-F|--field-separator FS] [(--pass | -c|--command \"COMMANDLINE\" [...] | --exec SIMPLECOMMAND [...] ${fileMarker:+[}${fileMarker}${fileMarker:+] [...]} ;) [[-]N[,[-]M,...] [...]]] [...]"
     echo
     printf 'Usage: %q %s\n' "$(basename "$1")" '... [-i[SUFFIX]|--in-place[=SUFFIX]] [--] [FILE ...] [-?|-h|--help]'
 }
@@ -147,7 +147,41 @@ END {
 ' "$@")" || { echo >&2 'ERROR: Failed to separate fields.'; exit 3; }
 fieldSeparator="${fieldSeparator%X}"
 
+processSet()
+{
+    local setCommand="${1:?}"; shift
+    local setFilespec="${1:?}"; shift
+    local quotedSetFilespec interpolatedCommand
+    printf -v quotedSetFilespec '%q' "$setFilespec"
+
+    interpolatedCommand="${setCommand//"$fileMarker"/$quotedSetFilespec}"
+    if [ "$interpolatedCommand" = "$setCommand" ]; then
+	eval "$setCommand" < "$setFilespec"
+    else
+	eval "$interpolatedCommand"
+    fi > "$tempFilespec" \
+	&& mv -- "$tempFilespec" "$setFilespec"
+}
+
+status=0
+readonly tempFilespec="${tempDirspec}/temp"
+if [ ${#fieldSelectors[@]} -gt 0 ]; then
+    for ((i = 0; i < ${#fieldSelectors[@]}; ++i))
+    do
+	setCommand="${fieldCommands[i]}"
+	[ -n "$setCommand" ] || continue
+	printf -v setFilespec '%s/set-%0.8d' "$tempDirspec" "$((i + 1))"
+
+	processSet "$setCommand" "$setFilespec" || status=$?
+    done
+else
+    for setFilespec in "$tempDirspec"/set-*
+    do
+	[ -n "$currentCommand" ] || continue
+	processSet "$currentCommand" "$setFilespec" || status=$?
+    done
+fi
+
 paste --delimiters "$fieldSeparator" -- "$tempDirspec"/set-* || exit 3
 
-#typeset -a interpolatedCommands=("${currentCommand[@]//"$fileMarker"/$arg}")
-# Use "interpolated or append, scalar value / array of values into eval'ed array" snippet to fall back to appending.
+exit $status
