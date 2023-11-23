@@ -1,0 +1,142 @@
+#!/bin/bash
+shopt -qs extglob
+
+: ${EACHFIELD_FILE_MARKER='{}'}
+fileMarker="$EACHFIELD_FILE_MARKER"; unset EACHFIELD_FILE_MARKER
+
+printShortUsage()
+{
+    printf 'Usage: cat FILE [...] | %q %s\n' "$(basename "$1")" "[-F|--field-separator FS] [(--pass | -c|--command \"COMMANDLINE\" [...] | --exec SIMPLECOMMAND [...] ${fileMarker:+[}${fileMarker}${fileMarker:+] [...]} ;) [-]N[,[-]M,...] [...]] [...]"
+    echo
+    printf 'Usage: %q %s\n' "$(basename "$1")" '... [-i[SUFFIX]|--in-place[=SUFFIX]] [--] [FILE ...] [-?|-h|--help]'
+}
+printUsage()
+{
+    # This is the short help when launched with no or incorrect arguments.
+    # It is printed to stderr to avoid accidental processing.
+    printShortUsage "$1" >&2
+    printf >&2 '\nTry %q --help for more information.\n' "$(basename "$1")"
+}
+printLongUsage()
+{
+    # This is the long "man page" when launched with the help argument.
+    # It is printed to stdout to allow paging with 'more'.
+    cat <<HELPDESCRIPTION
+Extract all rows of field(s) N (-N counted from behind), separated by FS,
+optionally pipe them through COMMAND (in sets of fields N,M,... / each
+individually when given as N M), and then reassemble the result (in the order
+given). When no N is passed, each field is processed individually.
+HELPDESCRIPTION
+    echo
+    printShortUsage "$1"
+    echo
+    cat <<HELPTEXT
+    --pass		Pass the field rows through unchanged; like
+			--command cat (but more efficient).
+    --command|-c CMD	Execute CMD as a command-line. Preceding field rows ${fileMarker:+either }are piped into it${fileMarker:+ or a $fileMarker marker inside COMMANDLINE is replaced with a temp file containing the field rows}.
+    --exec COMMAND [...] ;	Execute COMMAND; all following arguments are taken to be arguments to the COMMAND until an argument consisting of ';' is encountered. Preceding field rows ${fileMarker:+either }are piped into it${fileMarker:+ or a $fileMarker marker inside COMMANDLINE is replaced with a temp file containing the field rows}.
+
+cla-exitstatus
+
+Example:
+HELPTEXT
+    printf '%q %s\n' "$(basename "$1")" '--foo bar /tmp/foobar' # TODO
+}
+
+typeset -a awkArgs=()
+isInPlace=
+inPlaceExtension=
+typeset -a fieldSelectors=()
+typeset -a fieldCommands=()
+currentCommand=
+while [ $# -ne 0 ]
+do
+    case "$1" in
+	--help|-h|-\?)	shift; printLongUsage "$0"; exit 0;;
+	--pass)		shift; currentCommand='';;
+	--command|-c)	shift; currentCommand+="${currentCommand:+ | }$1"; shift;;
+	--field-separator|-F)
+			awkArgs+=("$1" "$2"); shift; shift;;
+	-i|--in-place)	isInPlace=t; shift;;
+	-i?*|--in-place=*)
+			isInPlace=t; inPlaceExtension="${1#-i}"; inPlaceExtension="${inPlaceExtension#--in-place=}"; shift;;
+	--exec)		shift
+			cmd=
+			printf -v escapedFileMarker %q "$fileMarker"
+			while [ $# -gt 0 -a "$1" != ';' ]
+			do
+			    printf -v quotedArg '%q' "$1"
+			    cmd="${cmd}${cmd:+ }${quotedArg//"$escapedFileMarker"/$fileMarker}"	# %q escapes {}, we don't want that to have it interpolated later.
+			    shift
+			done
+			if [ $# -eq 0 ]; then
+			    echo 'ERROR: --exec command must be concluded with ;!'; echo; printUsage "$0"
+			    exit 2
+			fi >&2
+			shift
+			currentCommand+="${currentCommand:+ | }$cmd"
+			;;
+	+([-0-9,]))	fieldSelectors+=("$1"); shift
+			fieldCommands+=("$currentCommand")
+			;;
+	--)		shift; break;;
+	-*)		{ echo "ERROR: Unknown option \"$1\"!"; echo; printUsage "$0"; } >&2; exit 2;;
+	*)		break;;
+    esac
+done
+
+tempDirspec="$(mktemp --directory --tmpdir "$(basename -- "$0")-XXXXXX" 2>/dev/null || { dirspec="${TMPDIR:-/tmp}/$(basename -- "$0").$$$RANDOM"; mkdir --parents -- "$dirspec" && printf %s "$dirspec"; })" || exit 3
+[ "${DEBUG:-}" ] || trap 'rm -rf -- "$tempDirspec" 2>/dev/null' EXIT
+
+IFS=$'\n'
+fieldSeparator="$(awk "${awkArgs[@]}" \
+    -v "tempDirspec=${tempDirspec//\\/\\\\}" \
+    -v "fieldSelectorList=${fieldSelectors[*]//\\/\\\\}" \
+'
+function max(n1, n2)
+{
+    return n1 > n2 ? n1 : n2
+}
+BEGIN {
+    N = split(fieldSelectorList, fieldSelectors, "\n")
+    for (i = 1; i <= N; ++i) {
+	fields[i][0] = 0; delete fields[i][0]
+	split(fieldSelectors[i], fields[i], ",")
+    }
+}
+NR == 1 {
+    # Use FS as output separator if it is not a regular expression.
+    firstTwoFields = $1 FS $2
+    if (NF < 2 || substr($0, 1, length(firstTwoFields)) == firstTwoFields) {
+	OFS = FS
+    } else if (FS == " " && (substr($0, 1, length(firstTwoFields)) == $1 "\t" $2)) {
+	OFS = "\t"
+    }
+}
+{
+    maxNF = max(maxNF, NF)
+    for (i = 1; i <= (N > 0 ? N : maxNF); ++i) {
+	sep = ""
+	row = ""
+	if (N > 0) {
+	    for (f in fields[i]) {
+		field = (fields[i][f] < 0 ? NF + fields[i][f] + 1 : fields[i][f])
+		row = row sep $field
+		sep = OFS
+	    }
+	} else {
+	    row = $i
+	}
+	print row > tempDirspec "/set-" i
+    }
+}
+END {
+    printf("%sX", OFS)
+}
+' "$@")" || { echo >&2 'ERROR: Failed to separate fields.'; exit 3; }
+fieldSeparator="${fieldSeparator%X}"
+
+paste --delimiters "$fieldSeparator" -- "$tempDirspec"/set-* || exit 3
+
+#typeset -a interpolatedCommands=("${currentCommand[@]//"$fileMarker"/$arg}")
+# Use "interpolated or append, scalar value / array of values into eval'ed array" snippet to fall back to appending.
