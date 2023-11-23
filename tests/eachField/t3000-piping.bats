@@ -35,3 +35,29 @@ end	two	hihi
 	three	hoho
 	four	" ]
 }
+
+@test "apply different commands to fields" {
+    run eachField \
+	--exec sed -e y/abcdefghijklmnopqrstuvwxyz/ABCDEFGHIJKLMNOPQRSTUVWXYZ/ \; 1 \
+	--exec sed -e 's/.*/[&]/' \; 2 \
+	--exec sed -e 's/$/!/' \; 3 \
+	"${BATS_TEST_DIRNAME}/rectangular-tabbed.txt"
+    [ $status -eq 0 ]
+    [ "$output" = "FOO	[one]	haha!
+BAR	[two]	hehe!
+BAZ	[three]	hihi!
+END	[four]	hoho!" ]
+}
+
+@test "apply different commands to multiple fields separately and multiple times" {
+    run eachField \
+	--exec sed -e y/abcdefghijklmnopqrstuvwxyz/ABCDEFGHIJKLMNOPQRSTUVWXYZ/ \; 1 3 \
+	--exec sed -e 's/.*/[&]/' \; 2 \
+	--exec sed -e 's/$/!/' \; 1 2 \
+	"${BATS_TEST_DIRNAME}/rectangular-tabbed.txt"
+    [ $status -eq 0 ]
+    [ "$output" = "FOO	HAHA	[one]	foo!	one!
+BAR	HEHE	[two]	bar!	two!
+BAZ	HIHI	[three]	baz!	three!
+END	HOHO	[four]	end!	four!" ]
+}

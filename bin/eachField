@@ -6,7 +6,7 @@ fileMarker="$EACHFIELD_FILE_MARKER"; unset EACHFIELD_FILE_MARKER
 
 printShortUsage()
 {
-    printf 'Usage: cat FILE [...] | %q %s\n' "$(basename "$1")" "[-F|--field-separator FS] [(--pass | -c|--command \"COMMANDLINE\" [...] | --exec SIMPLECOMMAND [...] ${fileMarker:+[}${fileMarker}${fileMarker:+] [...]} ;) [[-]N[,[-]M,...] [...]]] [...]"
+    printf 'Usage: cat FILE [...] | %q %s\n' "$(basename "$1")" "[-F|--field-separator FS] [(--pass | -c|--command \"COMMANDLINE\" [...] | --exec SIMPLECOMMAND [...] ${fileMarker:+[}${fileMarker}${fileMarker:+] [...]} ; [...]) [[-]N[,[-]M,...] [...]]] [...]"
     echo
     printf 'Usage: %q %s\n' "$(basename "$1")" '... [-i[SUFFIX]|--in-place[=SUFFIX]] [--] [FILE ...] [-?|-h|--help]'
 }
@@ -43,18 +43,27 @@ HELPTEXT
     printf '%q %s\n' "$(basename "$1")" '--foo bar /tmp/foobar' # TODO
 }
 
+addCommand()
+{
+    local cmd="${1:?}"; shift
+    [ "$previousType" = command ] || currentCommand=''
+    currentCommand+="${currentCommand:+ | }${cmd}"
+    previousType=command
+}
+
 typeset -a awkArgs=()
 isInPlace=
 inPlaceExtension=
 typeset -a fieldSelectors=()
 typeset -a fieldCommands=()
 currentCommand=
+previousType=
 while [ $# -ne 0 ]
 do
     case "$1" in
 	--help|-h|-\?)	shift; printLongUsage "$0"; exit 0;;
-	--pass)		shift; currentCommand='';;
-	--command|-c)	shift; currentCommand+="${currentCommand:+ | }$1"; shift;;
+	--pass)		shift; currentCommand=''; previousType=command;;
+	--command|-c)	shift; addCommand "${1:?}"; shift;;
 	--field-separator|-F)
 			awkArgs+=("$1" "$2"); shift; shift;;
 	-i|--in-place)	isInPlace=t; shift;;
@@ -74,10 +83,11 @@ do
 			    exit 2
 			fi >&2
 			shift
-			currentCommand+="${currentCommand:+ | }$cmd"
+			addCommand "$cmd"
 			;;
 	+([-0-9,]))	fieldSelectors+=("$1"); shift
 			fieldCommands+=("$currentCommand")
+			previousType=selector
 			;;
 	--)		shift; break;;
 	-*)		{ echo "ERROR: Unknown option \"$1\"!"; echo; printUsage "$0"; } >&2; exit 2;;
