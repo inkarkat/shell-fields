@@ -93,9 +93,10 @@ fieldSeparator="$(awk "${awkArgs[@]}" \
     -v "tempDirspec=${tempDirspec//\\/\\\\}" \
     -v "fieldSelectorList=${fieldSelectors[*]//\\/\\\\}" \
 '
-function max(n1, n2)
+function writeRowToSet(rowNum, rowContents,      setFilespec)
 {
-    return n1 > n2 ? n1 : n2
+    setFilespec = sprintf("%s/set-%0.8d", tempDirspec, rowNum)
+    print rowContents > setFilespec
 }
 BEGIN {
     N = split(fieldSelectorList, fieldSelectors, "\n")
@@ -114,7 +115,10 @@ NR == 1 {
     }
 }
 {
-    maxNF = max(maxNF, NF)
+    if (NF > maxNF) {
+	previousMaxNF = maxNF
+	maxNF = NF
+    }
     for (i = 1; i <= (N > 0 ? N : maxNF); ++i) {
 	sep = ""
 	row = ""
@@ -125,10 +129,17 @@ NR == 1 {
 		sep = OFS
 	    }
 	} else {
+	    if (NR > 1 && i > previousMaxNF) {
+		# Additional field(s): Start with empty previously encountered rows so that the fields remain aligned.
+		for (j = 1; j < NR; ++j) {
+		    writeRowToSet(i, "")
+		}
+	    }
 	    row = $i
 	}
-	print row > tempDirspec "/set-" i
+	writeRowToSet(i, row)
     }
+    previousMaxNF = maxNF
 }
 END {
     printf("%sX", OFS)
