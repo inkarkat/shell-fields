@@ -1,0 +1,91 @@
+#!/bin/bash
+shopt -qs extglob
+
+printShortUsage()
+{
+    # Note: short followed by long option; if the user knows the short one, she can
+    # skim the long one.
+    printf 'Usage: %q %s\n' "$(basename "$1")" '[-F|--field-separator FS] [--prefix PREFIX] [--suffix SUFFIX] [--empty TEXT] [--omit-empty] [--last-separator LAST-SEPARATOR] [--truncate-after "N[ TRAIL-OFF]"] [--summarize-larger "N[ ENTRIES]"] [--] SEPARATOR FILE [...] [-?|-h|--help]'
+    printf 'Usage: cat FILE [...] | %q %s\n' "$(basename "$1")" '[...] - SEPARATOR'
+}
+printUsage()
+{
+    # This is the short help when launched with no or incorrect arguments.
+    # It is printed to stderr to avoid accidental processing.
+    printShortUsage "$1" >&2
+    printf >&2 '\nTry %q --help for more information.\n' "$(basename "$1")"
+}
+printLongUsage()
+{
+    # This is the long "man page" when launched with the help argument.
+    # It is printed to stdout to allow paging with 'more'.
+    cat <<HELPDESCRIPTION
+Join all fields of each input line with SEPARATOR in between each.
+HELPDESCRIPTION
+    echo
+    printShortUsage "$1"
+    echo
+    cat <<HELPTEXT
+    --field-separator|-F FS
+			Use FS as the input field separator (as with AWK).
+    --prefix PREFIX	Put PREFIX before anything else.
+    --suffix SUFFIX	Append SUFFIX at the end.
+    --empty TEXT	Print TEXT instead of nothing when there are no fields
+			at all.
+    --omit-empty	Do not put a SEPARATOR around completely empty fields
+			(empty lines with -), and don't count them for
+			truncation or summary.
+    --last-separator LAST-SEPARATOR
+			Use LAST-SEPARATOR instead of SEPARATOR for joining the
+			second-to-last and last fields.
+    --truncate-after N[ TRAIL-OFF]
+			After enumerating N fields, omit further fields and just
+			trail off with ... / TRAIL-OFF.
+    --summarize-larger N[ ENTRIES]
+			If there are more than N fields, do not print any and
+			just summarize as N elements / ENTRIES.
+
+EXIT STATUS:
+    0	Complete success.
+    2	Bad invocation, wrong or missing command-line arguments.
+    99	At least one line had no fields at all and no alternative --empty TEXT
+	given.
+HELPTEXT
+}
+
+typeset -a fieldsToArgsArgs=()
+typeset -a joinByArgs=()
+while [ $# -ne 0 ]
+do
+    case "$1" in
+	--help|-h|-\?)	shift; printLongUsage "$0"; exit 0;;
+	--field-separator|-F)
+			fieldsToArgsArgs+=("$1" "$2"); shift; shift;;
+
+	--@(omit-empty))
+			joinByArgs+=("$1"); shift;;
+	--@(prefix|suffix|last-separator|truncate-after|summarize-larger))
+			joinByArgs+=("$1" "${2?}"); shift; shift;;
+	--empty)	joinByArgs+=("$1" "${2?}"); shift; shift; fieldsToArgsArgs+=(--run-if-empty);;
+	--)		joinByArgs+=("$1"); shift
+			if [ $# -eq 0 ]; then
+			    printUsage "$0" >&2
+			    exit 2
+			fi
+			joinByArgs+=("${1?}"); shift
+			break
+			;;
+	-)		shift
+			joinByArgs+=(--)
+			if [ $# -ne 1 ]; then
+			    printUsage "$0" >&2
+			    exit 2
+			fi
+			joinByArgs+=("${1?}"); shift
+			break
+			;;
+	-*)		{ echo "ERROR: Unknown option \"$1\"!"; echo; printUsage "$0"; } >&2; exit 2;;
+	*)		break;;
+    esac
+done
+eval "${*:+cat -- "$@" |}" 'fieldsToArgs "${fieldsToArgsArgs[@]}" -- joinBy "${joinByArgs[@]}"'
