@@ -1,0 +1,260 @@
+#!/bin/bash
+set -o pipefail
+shopt -qs extglob
+
+: ${EACHFIELD_FILE_MARKER='{}'}
+fileMarker="$EACHFIELD_FILE_MARKER"; unset EACHFIELD_FILE_MARKER
+
+printShortUsage()
+{
+    printf 'Usage: cat FILE [...] | %q %s\n' "$(basename "$1")" "[-F|--field-separator FS] [--separator|-s SEP] [(--pass | -c|--command \"COMMANDLINE\" [...] | --exec SIMPLECOMMAND [...] ${fileMarker:+[}${fileMarker}${fileMarker:+] [...]} ; [...]) [[-]N[,[-]M,...] [...]]] [...]"
+    echo
+    printf 'Usage: %q %s\n' "$(basename "$1")" '... [-i[SUFFIX]|--in-place[=SUFFIX]] [--] [FILE ...] [-?|-h|--help]'
+}
+printUsage()
+{
+    # This is the short help when launched with no or incorrect arguments.
+    # It is printed to stderr to avoid accidental processing.
+    printShortUsage "$1" >&2
+    printf >&2 '\nTry %q --help for more information.\n' "$(basename "$1")"
+}
+printLongUsage()
+{
+    # This is the long "man page" when launched with the help argument.
+    # It is printed to stdout to allow paging with 'more'.
+    cat <<HELPDESCRIPTION
+Extract all rows of field(s) N (-N counted from behind), separated by FS,
+optionally pipe them through COMMAND (in sets of fields N,M,... / each
+individually when given as N M), and then reassemble the result (in the order
+given). When no N is passed, each field is processed individually.
+HELPDESCRIPTION
+    echo
+    printShortUsage "$1"
+    echo
+    cat <<HELPTEXT
+    --field-separator|-F FS
+			Use FS as the input field separator (as with AWK).
+    --separator|-s SEP	Use SEP (instead of the original field separator)
+			between resulting fields.
+    --pass		Pass the field rows through unchanged; like
+			--command cat (but more efficient).
+    --command|-c CMD	Execute CMD as a command-line. Preceding field rows
+			${fileMarker:+either }are piped into it${fileMarker:+ or a $fileMarker marker inside
+			COMMANDLINE is replaced with a temp file containing the
+			field rows}.
+    --exec COMMAND [...] ;
+			Execute COMMAND; all following arguments are taken to be
+			arguments to the COMMAND until an argument consisting of
+			';' is encountered. Preceding field rows ${fileMarker:+either }are
+			piped into it${fileMarker:+ or a $fileMarker marker inside COMMANDLINE is
+			replaced with a temp file containing the field rows}.
+
+EXIT STATUS:
+    0	Complete success.
+    2	Bad invocation, wrong or missing command-line arguments.
+    3	Internal error or failed assertion.
+    *   any exit status from COMMAND(s)
+
+Example:
+HELPTEXT
+    printf '%q %s\n' "$(basename "$1")" "-F : -s ' ' --exec minmax --separator .. \; 3 4 /etc/passwd"
+}
+
+addCommand()
+{
+    local cmd="${1:?}"; shift
+    [ "$previousType" = command ] || currentCommand=''
+    currentCommand+="${currentCommand:+ | }${cmd}"
+    previousType=command
+}
+
+typeset -a allOptions=()
+typeset -a awkArgs=()
+isInPlace=
+inPlaceExtension=
+typeset -a fieldSelectors=()
+typeset -a fieldCommands=()
+currentCommand=
+previousType=
+unset outputSeparator
+while [ $# -ne 0 ]
+do
+    case "$1" in
+	--help|-h|-\?)	shift; printLongUsage "$0"; exit 0;;
+	--pass)		allOptions+=("$1"); shift; currentCommand=''; previousType=command;;
+	--command|-c)	allOptions+=("$1"); shift; addCommand "${1:?}"; shift;;
+	--field-separator|-F)
+			awkArgs+=("$1" "$2"); allOptions+=("$1" "$2"); shift; shift;;
+	--separator|-s)	allOptions+=("$1" "${2?}"); shift; outputSeparator="$1"; shift;;
+	-i|--in-place)	allOptions+=("$1"); shift; isInPlace=t;;
+	-i?*|--in-place=*)
+			isInPlace=t; inPlaceExtension="${1#-i}"; inPlaceExtension="${inPlaceExtension#--in-place=}"; allOptions+=("$1"); shift;;
+	--exec)		allOptions+=("$1"); shift
+			cmd=
+			printf -v escapedFileMarker %q "$fileMarker"
+			while [ $# -gt 0 -a "$1" != ';' ]
+			do
+			    printf -v quotedArg '%q' "$1"
+			    cmd="${cmd}${cmd:+ }${quotedArg//"$escapedFileMarker"/$fileMarker}"	# %q escapes {}, we don't want that to have it interpolated later.
+			    allOptions+=("$1"); shift
+			done
+			if [ $# -eq 0 ]; then
+			    echo 'ERROR: --exec command must be concluded with ;!'; echo; printUsage "$0"
+			    exit 2
+			fi >&2
+			allOptions+=("$1"); shift
+			addCommand "$cmd"
+			;;
+	+([-0-9,]))	fieldSelectors+=("$1"); allOptions+=("$1"); shift
+			fieldCommands+=("$currentCommand")
+			previousType=selector
+			;;
+	--)		shift; break;;
+	-*)		{ echo "ERROR: Unknown option \"$1\"!"; echo; printUsage "$0"; } >&2; exit 2;;
+	*)		break;;
+    esac
+done
+
+if [ "$isInPlace" ] && [ $# -gt 1 ]; then
+    # Multiple in-place FILEs need to be processed individually to have separate
+    # sets; we might as well do that with recursive invocations of ourselves.
+    EACHFILE_FILE_MARKER='' exec eachFile --worst-status -- \
+	"${BASH_SOURCE[0]}" "${allOptions[@]}" -- "$@"
+fi
+
+tempDirspec="$(mktemp --directory --tmpdir "$(basename -- "$0")-XXXXXX" 2>/dev/null || { dirspec="${TMPDIR:-/tmp}/$(basename -- "$0").$$$RANDOM"; mkdir --parents -- "$dirspec" && printf %s "$dirspec"; })" || exit 3
+[ "${DEBUG:-}" ] || trap 'rm -rf -- "$tempDirspec" 2>/dev/null' EXIT
+
+IFS=$'\n'
+fieldSeparator="$(awk "${awkArgs[@]}" \
+    -v "tempDirspec=${tempDirspec//\\/\\\\}" \
+    -v "fieldSelectorList=${fieldSelectors[*]//\\/\\\\}" \
+'
+function writeRowToSet(rowNum, rowContents,      setFilespec)
+{
+    setFilespec = sprintf("%s/set-%0.8d", tempDirspec, rowNum)
+    print rowContents > setFilespec
+}
+BEGIN {
+    N = split(fieldSelectorList, fieldSelectors, "\n")
+    for (i = 1; i <= N; ++i) {
+	fields[i][0] = 0; delete fields[i][0]
+	split(fieldSelectors[i], fields[i], ",")
+    }
+}
+NR == 1 {
+    # Use FS as output separator if it is not a regular expression.
+    firstTwoFields = $1 FS $2
+    if (NF < 2 || substr($0, 1, length(firstTwoFields)) == firstTwoFields) {
+	OFS = FS
+    } else if (FS == " " && (substr($0, 1, length(firstTwoFields)) == $1 "\t" $2)) {
+	OFS = "\t"
+    }
+}
+{
+    if (NF > maxNF) {
+	previousMaxNF = maxNF
+	maxNF = NF
+    }
+    for (i = 1; i <= (N > 0 ? N : maxNF); ++i) {
+	sep = ""
+	row = ""
+	if (N > 0) {
+	    for (f in fields[i]) {
+		field = (fields[i][f] < 0 ? NF + fields[i][f] + 1 : fields[i][f])
+		row = row sep $field
+		sep = OFS
+	    }
+	} else {
+	    if (NR > 1 && i > previousMaxNF) {
+		# Additional field(s): Start with empty previously encountered rows so that the fields remain aligned.
+		for (j = 1; j < NR; ++j) {
+		    writeRowToSet(i, "")
+		}
+	    }
+	    row = $i
+	}
+	writeRowToSet(i, row)
+    }
+    previousMaxNF = maxNF
+}
+END {
+    printf("%sX", OFS)
+}
+' "$@")" || { echo >&2 'ERROR: Failed to separate fields.'; exit 3; }
+fieldSeparator="${fieldSeparator%X}"
+: ${outputSeparator=$fieldSeparator}
+
+processSet()
+{
+    local setCommand="${1:?}"; shift
+    local setFilespec="${1:?}"; shift
+    local quotedSetFilespec interpolatedCommand
+    printf -v quotedSetFilespec '%q' "$setFilespec"
+
+    interpolatedCommand="${setCommand//"$fileMarker"/$quotedSetFilespec}"
+    if [ "$interpolatedCommand" = "$setCommand" ]; then
+	eval "$setCommand" < "$setFilespec"
+    else
+	eval "$interpolatedCommand"
+    fi > "$tempFilespec" \
+	&& mv -- "$tempFilespec" "$setFilespec"
+}
+
+processAllSets()
+{
+    local status=0
+    local -r tempFilespec="${tempDirspec}/temp"
+    if [ ${#fieldSelectors[@]} -gt 0 ]; then
+	for ((i = 0; i < ${#fieldSelectors[@]}; ++i))
+	do
+	    setCommand="${fieldCommands[i]}"
+	    [ -n "$setCommand" ] || continue
+	    printf -v setFilespec '%s/set-%0.8d' "$tempDirspec" "$((i + 1))"
+
+	    processSet "$setCommand" "$setFilespec" || status=$?
+	done
+    else
+	for setFilespec in "$tempDirspec"/set-*
+	do
+	    [ -n "$currentCommand" ] || continue
+	    processSet "$currentCommand" "$setFilespec" || status=$?
+	done
+    fi
+    return $status
+}
+
+recombineSetsAndOutput()
+{
+    local separator="${1?}"; shift
+
+    if [ ${#separator} -gt 1 ]; then
+	: ${EACHFIELD_MULTIDELIMITER_PLACEHOLDER:=}
+	# paste does not support multi-character delimiters, so we use a (hopefully unused) single character and replace it later.
+	local literalSeparator="$separator"
+	literalSeparator="${literalSeparator//\\/\\\\}"
+	literalSeparator="${literalSeparator//&/\\&}"
+	paste --delimiters "$EACHFIELD_MULTIDELIMITER_PLACEHOLDER" -- "$tempDirspec"/set-* \
+	    | sed -e "s#${EACHFIELD_MULTIDELIMITER_PLACEHOLDER}#${literalSeparator//#/\\#}#g"
+    else
+	paste --delimiters "$separator" -- "$tempDirspec"/set-*
+    fi || return 3
+}
+
+recombineSets()
+{
+    local separator="${1?}"; shift
+    if [ "$isInPlace" ] && [ $# -eq 1 ]; then
+	[ -z "$inPlaceExtension" ] \
+	    || mv -- "$1" "${1}${inPlaceExtension}" || return $?
+	recombineSetsAndOutput "$separator" > "$1"
+    elif [ $# -gt 1 ]; then
+	echo >&2 'ASSERT: Single FILE.'; exit 3
+    else
+	recombineSetsAndOutput "$separator"
+    fi
+}
+
+processAllSets; status=$?
+recombineSets "$outputSeparator" "$@" || status=$?
+exit $status
