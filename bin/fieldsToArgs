@@ -1,0 +1,271 @@
+#!/bin/bash
+
+: ${FIELDSTOARGS_LINE_WHAT=line}
+: ${FIELDSTOARGS_ARG_MARKER='{}'}
+argMarker="$FIELDSTOARGS_ARG_MARKER"; unset FIELDSTOARGS_ARG_MARKER
+
+hasProgressNotification=; type -t progressNotification >/dev/null && hasProgressNotification=t
+
+printShortUsage()
+{
+    # Note: short followed by long option; if the user knows the short one, she can
+    # skim the long one.
+    printf 'Usage: cat FILE [...] | %q %s%s %s\n' "$(basename "$1")" '[-F|--field-separator FS] [-r|--run-if-empty] [--header-field N|--extract-header-field N]' "${hasProgressNotification:+ [--progress SINK]}" '[--with-header [--separate-errors] [--color=(always|auto|never)|--no-color]|--with-prompt [--initial-status NUM] [--trailing-prompt|--no-trailing-prompt] [--no-output-no-prompt] [--no-output-no-error] [--emulate-prompt]] [--no-success-no-count|--no-count-on N] [--exit-on-success|--exit-on-failure|--exit-on NUM] [--worst-status] [--comment COMMENT] [--summarize-failed ERROR-TEXT [--summarize-failed-separator SEP]] [--between-command BETWEEN-COMMAND] -c|--command "COMMANDLINE" [...] | [--] SIMPLECOMMAND [...] [-?|-h|--help]'
+}
+printUsage()
+{
+    # This is the short help when launched with no or incorrect arguments.
+    # It is printed to stderr to avoid accidental processing.
+    printShortUsage "$1" >&2
+    printf >&2 '\nTry %q --help for more information.\n' "$(basename "$1")"
+}
+printLongUsage()
+{
+    # This is the long "man page" when launched with the help argument.
+    # It is printed to stdout to allow paging with 'more'.
+    cat <<HELPDESCRIPTION
+Read individual lines from standard input, separate each line into fields and
+pass the line's fields as individual arguments (${argMarker:+either }appended${argMarker:+ or replacing any
+$argMarker marker}) to COMMAND.
+HELPDESCRIPTION
+    echo
+    printShortUsage "$1"
+    echo
+    cat <<HELPTEXT
+    --field-separator|-F FS
+			Use FS as the input field separator (as with AWK).
+    --run-if-empty|-r	Also run COMMANDs (without any supplied arguments) on an
+			empty line. By default, nothing will be executed.
+    --header-field N	Use the N'th field for the progress notification and
+			printed header.
+    --extract-header-field N
+			Drop the N'th field from the passed arguments and use it
+			solely for the progress notification and printed
+			header.${hasProgressNotification:+
+    --progress SINK	Report the current line / selected field through one of
+			the SINKs of the progressNotification command.}
+    --with-header	Print a header (containing the current line / selected
+			field) before each execution.
+    --separate-errors	Do not combine command output and command errors into
+			one (paged) stream. Commands that just cause error
+			output won't have a header then. Error output will
+			remain on its separate file descriptor and will not be
+			paged. Useful if you want to suppress errors or handle
+			them separately.
+    --with-prompt	Emulate a full prompt (as if invoking COMMAND) before
+			each execution.
+    --emulate-prompt	    Customizations of the prompt emulation around
+    --initial-status NUM    COMMAND; cp. runWithPrompt
+    --trailing-prompt
+    --no-trailing-prompt
+    --no-output-no-prompt
+    --no-output-no-error
+    --no-success-no-count   Stop on condition / summarize at end; cp. runWith
+    --no-count-on N	    Cannot be combined with --with-header.
+    --exit-on-success
+    --exit-on-failure
+    --exit-on NUM
+    --worst-status
+    --comment COMMENT
+    --summarize-failed ERROR-TEXT
+    --summarize-failed-separator SEP
+    --between-command BETWEEN-COMMAND
+			Execute BETWEEN-COMMAND in between each COMMAND
+			execution.
+    --command|-c CMD	The command line to be executed. When this is a simple
+			command, it can also be passed as such. Read arguments
+			are appended${argMarker:+ or replace the string $argMarker}.
+HELPTEXT
+}
+
+typeset -a awkArgs=()
+isRunIfEmpty=
+headerIndex=
+isRemoveHeaderField=
+isNeedEval=
+typeset -a commands=()
+progressSink=
+with=
+errorRedir='2>&1'
+typeset -a colorArg=()
+betweenCommand=
+runWithCommand=runWith
+typeset -a runWithPromptArgs=()
+while [ $# -ne 0 ]
+do
+    case "$1" in
+	--help|-h|-\?)	shift; printLongUsage "$0"; exit 0;;
+	--field-separator|-F)
+			awkArgs+=("$1" "$2"); shift; shift;;
+	--run-if-empty|-r)
+			shift; isRunIfEmpty=t;;
+	--extract-header-field)
+			isRemoveHeaderField=t;&
+	--header-field)	shift; headerIndex="$((${1:?} - 1))"; shift;;
+
+	--command|-c)	shift; commands+=(${commands:+;} "$1"); isNeedEval=t; shift;;
+
+	--progress)	shift; progressSink="$1"; shift;;
+	--with-header)	shift; with=header;;
+	--separate-errors)
+			shift; errorRedir='';;
+	--no-color|--color=*)	colorArg=("$1"); shift;;
+	--color)		colorArg=("$1" "$2"); shift; shift;;
+	--with-prompt)	shift; with=prompt; runWithCommand=runWithPrompt;;
+
+	--trailing-prompt|--no-trailing-prompt|--no-output-no-prompt|--no-output-no-error|--no-success-no-count|--exit-on-success|--exit-on-failure|--emulate-prompt|--worst-status)
+			runWithPromptArgs+=("$1"); shift;;
+	--initial-status|--no-count-on|--exit-on|--comment|--summarize-failed|--summarize-failed-separator)
+			runWithPromptArgs+=("$1" "$2"); shift; shift;;
+	--between-command)
+			shift; betweenCommand="$1"; shift;;
+
+	--)		shift; break;;
+	-*)		{ echo "ERROR: Unknown option \"$1\"!"; echo; printUsage "$0"; } >&2; exit 2;;
+	*)		break;;
+    esac
+done
+if [ $# -ne 0 ]; then
+    if [ "$isNeedEval" ]; then
+	# Combine --command and SIMPLECOMMAND; need to quote SIMPLECOMMAND to
+	# undo the effects of eval.
+	printf -v quotedSimpleCommand '%q ' "$@"
+	printf -v escapedArgMarker %q "$argMarker"
+	commands+=(${commands:+;} "${quotedSimpleCommand//"$escapedArgMarker"/$argMarker}")	# %q escapes {}, we don't want that to have it interpolated later.
+    else
+	commands=("$@")
+    fi
+fi
+if [ ${#commands[@]} -eq 0 ]; then
+    echo 'ERROR: No COMMAND(s) specified; need to pass -c|--command "COMMANDLINE", or SIMPLECOMMAND.'
+    echo
+    printUsage "$0"
+    exit 2
+elif [ ${#runWithPromptArgs[@]} -gt 0 -a "$with" = header ]; then
+    echo 'ERROR: Cannot combine runWith[Prompt] arguments with --with-header.'
+    echo
+    printUsage "$0"
+    exit 2
+fi >&2
+
+if [ "$hasProgressNotification" ] && [ -n "$progressSink" ]; then
+    exec 4> >(progressNotification --to "$progressSink" ${FIELDSTOARGS_LINE_WHAT:+--prepend-count "$FIELDSTOARGS_LINE_WHAT"} 2>/dev/null)
+
+    reportProgress()
+    {
+	trap 'reportProgress() { :; }; trap PIPE' PIPE
+	printf '%s\n' "$*" >&4 2>/dev/null  # Silence "printf: write error: Broken pipe"
+    }
+else
+    reportProgress() { :; }
+fi
+
+parseFields()
+{
+    awk "${awkArgs[@]}" '
+{
+    print NF
+    for (i = 1; i <= NF; ++i) {
+	print $i
+    }
+}
+'
+}
+
+typeset -a args=()
+readArgs()
+{
+    if [ $argCnt -eq 0 ]; then
+	if [ "$isRunIfEmpty" ]; then
+	    args=()
+	else
+	    return 1
+	fi
+    else
+	readarray -t -n $argCnt args
+    fi
+}
+
+typeset -a interpolatedCommands=()
+buildHeaderAndInterpolatedCommands()
+{
+    if [ -n "$headerIndex" ]; then
+	header="${args[*]:$headerIndex:1}"
+	[ "$isRemoveHeaderField" ] && args=("${args[@]:0:$headerIndex}" "${args[@]:$((headerIndex + 1))}")
+    else
+	header="${args[*]}"
+    fi
+
+    if [ "$isNeedEval" ]; then
+	local quotedArgs; printf -v quotedArgs '%q ' "${args[@]}"; quotedArgs="${quotedArgs% }"
+	interpolatedCommands=("${commands[@]//"$argMarker"/$quotedArgs}")
+	[ "${interpolatedCommands[*]}" = "${commands[*]}" ] && interpolatedCommands+=("$quotedArgs")
+    else
+	local didInterpolate=
+	interpolatedCommands=()
+	for c in "${commands[@]}"
+	do
+	if [ "$c" = "$argMarker" ]; then
+	    interpolatedCommands+=("${args[@]}")
+	    didInterpolate=t
+	else
+	    interpolatedCommands+=("$c")
+	fi
+	done
+	[ "$didInterpolate" ] || interpolatedCommands+=("${args[@]}")
+    fi
+}
+
+isFirst=t
+case "$with" in
+    prompt)
+	[ ${#runWithPromptArgs[@]} -eq 0 ] && runWithPromptArgs=(--worst-status)
+	quoter='%q'; [ "$isNeedEval" ] && quoter='%s'
+	parseFields | while IFS=$'\n' read -r argCnt
+	do
+	    readArgs || continue
+
+	    if [ ! "$isFirst" ] && [ -n "$betweenCommand" ]; then
+		if [ "${betweenCommand:$((${#betweenCommand} - 1))}" = ';' ]; then
+		    printf '%s ' "$betweenCommand"  # Prepend the BETWEEN-COMMAND to the next execution (so there's no separate prompt) if it ends with a semicolon. Its exit status is then ignored.
+		else
+		    printf '%s\n' "$betweenCommand" # Use a separate prompt (and with it consider its exit status).
+		fi
+	    fi
+
+	    buildHeaderAndInterpolatedCommands
+	    [ -z "$header" ] || reportProgress "$header"
+
+	    printf "$quoter " "${interpolatedCommands[@]}"
+	    printf '\n'
+	    isFirst=
+	done | ${runWithCommand:?} "${runWithPromptArgs[@]}"
+	;;
+    *)
+	status=0
+	: ${FIELDSTOARGS_HEADER_ID:="fieldsToArgs-$$-$RANDOM"}
+	isHeader=; [ "$with" = 'header' ] && isHeader=t
+	exec 3<&0
+	while IFS=$'\n' read -r argCnt
+	do
+	    readArgs || continue
+
+	    if [ ! "$isFirst" ] && [ -n "$betweenCommand" ]; then
+		eval "$betweenCommand" <&3 || { exitStatus=$?; if [ $exitStatus -gt $status ]; then status=$exitStatus; fi; }
+	    fi
+
+	    buildHeaderAndInterpolatedCommands
+	    [ -z "$header" ] || reportProgress "$header"
+
+	    if [ "$isNeedEval" ]; then
+		typeset -a c=("${interpolatedCommands[@]}")
+	    else
+		typeset -a c=('"${interpolatedCommands[@]}"')
+	    fi
+	    (eval "${isHeader:+{}" "${c[@]}" "${isHeader:+; \} $errorRedir | withHeader "${colorArg[@]}" --id '$FIELDSTOARGS_HEADER_ID' -- '${header:-(empty)}'}") <&3 || \
+		{ exitStatus=$?; if [ $exitStatus -gt $status ]; then status=$exitStatus; fi; }
+	    isFirst=
+	done < <(parseFields)
+	exit $status
+	;;
+esac
