@@ -1,4 +1,5 @@
 #!/bin/bash
+set -o pipefail
 shopt -qs extglob
 
 : ${EACHFIELD_FILE_MARKER='{}'}
@@ -173,25 +174,60 @@ processSet()
 	&& mv -- "$tempFilespec" "$setFilespec"
 }
 
-status=0
-readonly tempFilespec="${tempDirspec}/temp"
-if [ ${#fieldSelectors[@]} -gt 0 ]; then
-    for ((i = 0; i < ${#fieldSelectors[@]}; ++i))
-    do
-	setCommand="${fieldCommands[i]}"
-	[ -n "$setCommand" ] || continue
-	printf -v setFilespec '%s/set-%0.8d' "$tempDirspec" "$((i + 1))"
+processAllSets()
+{
+    local status=0
+    local -r tempFilespec="${tempDirspec}/temp"
+    if [ ${#fieldSelectors[@]} -gt 0 ]; then
+	for ((i = 0; i < ${#fieldSelectors[@]}; ++i))
+	do
+	    setCommand="${fieldCommands[i]}"
+	    [ -n "$setCommand" ] || continue
+	    printf -v setFilespec '%s/set-%0.8d' "$tempDirspec" "$((i + 1))"
 
-	processSet "$setCommand" "$setFilespec" || status=$?
-    done
-else
-    for setFilespec in "$tempDirspec"/set-*
-    do
-	[ -n "$currentCommand" ] || continue
-	processSet "$currentCommand" "$setFilespec" || status=$?
-    done
-fi
+	    processSet "$setCommand" "$setFilespec" || status=$?
+	done
+    else
+	for setFilespec in "$tempDirspec"/set-*
+	do
+	    [ -n "$currentCommand" ] || continue
+	    processSet "$currentCommand" "$setFilespec" || status=$?
+	done
+    fi
+    return $status
+}
 
-paste --delimiters "$fieldSeparator" -- "$tempDirspec"/set-* || exit 3
+recombineSetsAndOutput()
+{
+    local fieldSeparator="${1?}"; shift
 
+    if [ ${#fieldSeparator} -gt 1 ]; then
+	: ${EACHFIELD_MULTIDELIMITER_PLACEHOLDER:=}
+	# paste does not support multi-character delimiters, so we use a (hopefully unused) single character and replace it later.
+	local literalFieldSeparator="$fieldSeparator"
+	literalFieldSeparator="${literalFieldSeparator//\\/\\\\}"
+	literalFieldSeparator="${literalFieldSeparator//&/\\&}"
+	paste --delimiters "$EACHFIELD_MULTIDELIMITER_PLACEHOLDER" -- "$tempDirspec"/set-* \
+	    | sed -e "s#${EACHFIELD_MULTIDELIMITER_PLACEHOLDER}#${literalFieldSeparator//#/\\#}#g"
+    else
+	paste --delimiters "$fieldSeparator" -- "$tempDirspec"/set-*
+    fi || return 3
+}
+
+recombineSets()
+{
+    local fieldSeparator="${1?}"; shift
+    if [ "$isInPlace" ] && [ $# -eq 1 ]; then
+	[ -z "$inPlaceExtension" ] \
+	    || mv -- "$1" "${1}${inPlaceExtension}" || return $?
+	recombineSetsAndOutput "$fieldSeparator" > "$1"
+    elif [ $# -gt 1 ]; then
+	echo >&2 'ASSERT: Single FILE.'; exit 3
+    else
+	recombineSetsAndOutput "$fieldSeparator"
+    fi
+}
+
+processAllSets; status=$?
+recombineSets "$fieldSeparator" "$@" || status=$?
 exit $status
