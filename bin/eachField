@@ -7,7 +7,7 @@ fileMarker="$EACHFIELD_FILE_MARKER"; unset EACHFIELD_FILE_MARKER
 
 printShortUsage()
 {
-    printf 'Usage: cat FILE [...] | %q %s\n' "$(basename "$1")" "[-F|--field-separator FS] [(--pass | -c|--command \"COMMANDLINE\" [...] | --exec SIMPLECOMMAND [...] ${fileMarker:+[}${fileMarker}${fileMarker:+] [...]} ; [...]) [[-]N[,[-]M,...] [...]]] [...]"
+    printf 'Usage: cat FILE [...] | %q %s\n' "$(basename "$1")" "[-F|--field-separator FS] [--separator|-s SEP] [(--pass | -c|--command \"COMMANDLINE\" [...] | --exec SIMPLECOMMAND [...] ${fileMarker:+[}${fileMarker}${fileMarker:+] [...]} ; [...]) [[-]N[,[-]M,...] [...]]] [...]"
     echo
     printf 'Usage: %q %s\n' "$(basename "$1")" '... [-i[SUFFIX]|--in-place[=SUFFIX]] [--] [FILE ...] [-?|-h|--help]'
 }
@@ -34,6 +34,8 @@ HELPDESCRIPTION
     cat <<HELPTEXT
     --field-separator|-F FS
 			Use FS as the input field separator (as with AWK).
+    --separator|-s SEP	Use SEP (instead of the original field separator)
+			between resulting fields.
     --pass		Pass the field rows through unchanged; like
 			--command cat (but more efficient).
     --command|-c CMD	Execute CMD as a command-line. Preceding field rows
@@ -55,7 +57,7 @@ EXIT STATUS:
 
 Example:
 HELPTEXT
-    printf '%q %s\n' "$(basename "$1")" '-F : --exec minmax --separator .. \; 3 4 /etc/passwd'
+    printf '%q %s\n' "$(basename "$1")" "-F : -s ' ' --exec minmax --separator .. \; 3 4 /etc/passwd"
 }
 
 addCommand()
@@ -74,6 +76,7 @@ typeset -a fieldSelectors=()
 typeset -a fieldCommands=()
 currentCommand=
 previousType=
+unset outputSeparator
 while [ $# -ne 0 ]
 do
     case "$1" in
@@ -82,6 +85,7 @@ do
 	--command|-c)	allOptions+=("$1"); shift; addCommand "${1:?}"; shift;;
 	--field-separator|-F)
 			awkArgs+=("$1" "$2"); allOptions+=("$1" "$2"); shift; shift;;
+	--separator|-s)	allOptions+=("$1" "${2?}"); shift; outputSeparator="$1"; shift;;
 	-i|--in-place)	allOptions+=("$1"); shift; isInPlace=t;;
 	-i?*|--in-place=*)
 			isInPlace=t; inPlaceExtension="${1#-i}"; inPlaceExtension="${inPlaceExtension#--in-place=}"; allOptions+=("$1"); shift;;
@@ -179,6 +183,7 @@ END {
 }
 ' "$@")" || { echo >&2 'ERROR: Failed to separate fields.'; exit 3; }
 fieldSeparator="${fieldSeparator%X}"
+: ${outputSeparator=$fieldSeparator}
 
 processSet()
 {
@@ -221,35 +226,35 @@ processAllSets()
 
 recombineSetsAndOutput()
 {
-    local fieldSeparator="${1?}"; shift
+    local separator="${1?}"; shift
 
-    if [ ${#fieldSeparator} -gt 1 ]; then
+    if [ ${#separator} -gt 1 ]; then
 	: ${EACHFIELD_MULTIDELIMITER_PLACEHOLDER:=}
 	# paste does not support multi-character delimiters, so we use a (hopefully unused) single character and replace it later.
-	local literalFieldSeparator="$fieldSeparator"
-	literalFieldSeparator="${literalFieldSeparator//\\/\\\\}"
-	literalFieldSeparator="${literalFieldSeparator//&/\\&}"
+	local literalSeparator="$separator"
+	literalSeparator="${literalSeparator//\\/\\\\}"
+	literalSeparator="${literalSeparator//&/\\&}"
 	paste --delimiters "$EACHFIELD_MULTIDELIMITER_PLACEHOLDER" -- "$tempDirspec"/set-* \
-	    | sed -e "s#${EACHFIELD_MULTIDELIMITER_PLACEHOLDER}#${literalFieldSeparator//#/\\#}#g"
+	    | sed -e "s#${EACHFIELD_MULTIDELIMITER_PLACEHOLDER}#${literalSeparator//#/\\#}#g"
     else
-	paste --delimiters "$fieldSeparator" -- "$tempDirspec"/set-*
+	paste --delimiters "$separator" -- "$tempDirspec"/set-*
     fi || return 3
 }
 
 recombineSets()
 {
-    local fieldSeparator="${1?}"; shift
+    local separator="${1?}"; shift
     if [ "$isInPlace" ] && [ $# -eq 1 ]; then
 	[ -z "$inPlaceExtension" ] \
 	    || mv -- "$1" "${1}${inPlaceExtension}" || return $?
-	recombineSetsAndOutput "$fieldSeparator" > "$1"
+	recombineSetsAndOutput "$separator" > "$1"
     elif [ $# -gt 1 ]; then
 	echo >&2 'ASSERT: Single FILE.'; exit 3
     else
-	recombineSetsAndOutput "$fieldSeparator"
+	recombineSetsAndOutput "$separator"
     fi
 }
 
 processAllSets; status=$?
-recombineSets "$fieldSeparator" "$@" || status=$?
+recombineSets "$outputSeparator" "$@" || status=$?
 exit $status
