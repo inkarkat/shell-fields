@@ -32,16 +32,30 @@ HELPDESCRIPTION
     printShortUsage "$1"
     echo
     cat <<HELPTEXT
+    --field-separator|-F FS
+			Use FS as the input field separator (as with AWK).
     --pass		Pass the field rows through unchanged; like
 			--command cat (but more efficient).
-    --command|-c CMD	Execute CMD as a command-line. Preceding field rows ${fileMarker:+either }are piped into it${fileMarker:+ or a $fileMarker marker inside COMMANDLINE is replaced with a temp file containing the field rows}.
-    --exec COMMAND [...] ;	Execute COMMAND; all following arguments are taken to be arguments to the COMMAND until an argument consisting of ';' is encountered. Preceding field rows ${fileMarker:+either }are piped into it${fileMarker:+ or a $fileMarker marker inside COMMANDLINE is replaced with a temp file containing the field rows}.
+    --command|-c CMD	Execute CMD as a command-line. Preceding field rows
+			${fileMarker:+either }are piped into it${fileMarker:+ or a $fileMarker marker inside
+			COMMANDLINE is replaced with a temp file containing the
+			field rows}.
+    --exec COMMAND [...] ;
+			Execute COMMAND; all following arguments are taken to be
+			arguments to the COMMAND until an argument consisting of
+			';' is encountered. Preceding field rows ${fileMarker:+either }are
+			piped into it${fileMarker:+ or a $fileMarker marker inside COMMANDLINE is
+			replaced with a temp file containing the field rows}.
 
-cla-exitstatus
+EXIT STATUS:
+    0	Complete success.
+    2	Bad invocation, wrong or missing command-line arguments.
+    3	Internal error or failed assertion.
+    *   any exit status from COMMAND(s)
 
 Example:
 HELPTEXT
-    printf '%q %s\n' "$(basename "$1")" '--foo bar /tmp/foobar' # TODO
+    printf '%q %s\n' "$(basename "$1")" '-F : --exec minmax --separator .. \; 3 4 /etc/passwd'
 }
 
 addCommand()
