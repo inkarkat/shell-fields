@@ -52,6 +52,7 @@ addCommand()
     previousType=command
 }
 
+typeset -a allOptions=()
 typeset -a awkArgs=()
 isInPlace=
 inPlaceExtension=
@@ -63,30 +64,30 @@ while [ $# -ne 0 ]
 do
     case "$1" in
 	--help|-h|-\?)	shift; printLongUsage "$0"; exit 0;;
-	--pass)		shift; currentCommand=''; previousType=command;;
-	--command|-c)	shift; addCommand "${1:?}"; shift;;
+	--pass)		allOptions+=("$1"); shift; currentCommand=''; previousType=command;;
+	--command|-c)	allOptions+=("$1"); shift; addCommand "${1:?}"; shift;;
 	--field-separator|-F)
-			awkArgs+=("$1" "$2"); shift; shift;;
-	-i|--in-place)	isInPlace=t; shift;;
+			awkArgs+=("$1" "$2"); allOptions+=("$1" "$2"); shift; shift;;
+	-i|--in-place)	allOptions+=("$1"); shift; isInPlace=t;;
 	-i?*|--in-place=*)
-			isInPlace=t; inPlaceExtension="${1#-i}"; inPlaceExtension="${inPlaceExtension#--in-place=}"; shift;;
-	--exec)		shift
+			isInPlace=t; inPlaceExtension="${1#-i}"; inPlaceExtension="${inPlaceExtension#--in-place=}"; allOptions+=("$1"); shift;;
+	--exec)		allOptions+=("$1"); shift
 			cmd=
 			printf -v escapedFileMarker %q "$fileMarker"
 			while [ $# -gt 0 -a "$1" != ';' ]
 			do
 			    printf -v quotedArg '%q' "$1"
 			    cmd="${cmd}${cmd:+ }${quotedArg//"$escapedFileMarker"/$fileMarker}"	# %q escapes {}, we don't want that to have it interpolated later.
-			    shift
+			    allOptions+=("$1"); shift
 			done
 			if [ $# -eq 0 ]; then
 			    echo 'ERROR: --exec command must be concluded with ;!'; echo; printUsage "$0"
 			    exit 2
 			fi >&2
-			shift
+			allOptions+=("$1"); shift
 			addCommand "$cmd"
 			;;
-	+([-0-9,]))	fieldSelectors+=("$1"); shift
+	+([-0-9,]))	fieldSelectors+=("$1"); allOptions+=("$1"); shift
 			fieldCommands+=("$currentCommand")
 			previousType=selector
 			;;
@@ -95,6 +96,13 @@ do
 	*)		break;;
     esac
 done
+
+if [ "$isInPlace" ] && [ $# -gt 1 ]; then
+    # Multiple in-place FILEs need to be processed individually to have separate
+    # sets; we might as well do that with recursive invocations of ourselves.
+    EACHFILE_FILE_MARKER='' exec eachFile --worst-status -- \
+	"${BASH_SOURCE[0]}" "${allOptions[@]}" -- "$@"
+fi
 
 tempDirspec="$(mktemp --directory --tmpdir "$(basename -- "$0")-XXXXXX" 2>/dev/null || { dirspec="${TMPDIR:-/tmp}/$(basename -- "$0").$$$RANDOM"; mkdir --parents -- "$dirspec" && printf %s "$dirspec"; })" || exit 3
 [ "${DEBUG:-}" ] || trap 'rm -rf -- "$tempDirspec" 2>/dev/null' EXIT
