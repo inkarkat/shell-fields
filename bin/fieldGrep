@@ -8,14 +8,14 @@ printUsage()
 Print lines where selected field(s) N (-N counted from behind), separated by FS, match a PATTERN.
 HELPTEXT
     echo
-    printf 'Usage: cat FILE [...] | %q %s\n' "$(basename "$1")" '[-F|--field-separator FS] [-u|--unbuffered] GREP-OPTIONS [...] [-]N [...]'
+    printf 'Usage: cat FILE [...] | %q %s\n' "$(basename "$1")" '[-F|--field-separator FS] [-u|--unbuffered] [GREP-OPTIONS ...] -e|--regexp PATTERN|-f|--file FILE [...] [-]N [...]'
     printf 'Usage: %q %s\n' "$(basename "$1")" '-i|--input FILESPEC [...] GREP-OPTIONS [...] [-]N [...] [-?|-h|--help]'
     echo
     cat <<HELPTEXT
 Print lines where any but the passed field(s) N (-N counted from behind), separated by FS, match a PATTERN.
 HELPTEXT
     echo
-    printf 'Usage: cat FILE [...] | %q %s\n' "$(basename "$1")" '[-F|--field-separator FS] [-u|--unbuffered] -V|--invert-fields GREP-OPTIONS [...] [-]N [...]'
+    printf 'Usage: cat FILE [...] | %q %s\n' "$(basename "$1")" '[-F|--field-separator FS] [-u|--unbuffered] -V|--invert-fields [GREP-OPTIONS ...] -e|--regexp PATTERN|-f|--file FILE [...] [-]N [...]'
     printf 'Usage: %q %s\n' "$(basename "$1")" '-i|--input FILESPEC [...] -V|--invert-fields GREP-OPTIONS [...] [-]N [...] [-?|-h|--help]'
 }
 
@@ -51,8 +51,8 @@ do
 	--only-matching|-o)	grepArgs+=("$1"); isOnlyMatching=t; shift;;
 	--regexp|-e)		grepPatternArgs+=("$1" "$2"); shift; shift;;
 	--regexp=*)		grepPatternArgs+=(--regexp "${1#--regexp=}"); shift;;
-	--file|-f)		grepArgs+=("$1" "$2"); shift; shift;;
-	--file=*)		grepArgs+=("$1"); shift;;
+	--file|-f)		grepPatternArgs+=("$1" "$2"); shift; shift;;
+	--file=*)		grepPatternArgs+=("$1"); shift;;
 
 	--input|-i)		shift; awkArgs+=("$1"); shift;;
 	--invert-fields|-V)	shift; isInvertFields=t;;
