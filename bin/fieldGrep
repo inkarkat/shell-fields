@@ -9,14 +9,14 @@ Print lines where selected field(s) N (-N counted from behind), separated by FS,
 HELPTEXT
     echo
     printf 'Usage: cat FILE [...] | %q %s\n' "$(basename "$1")" '[-F|--field-separator FS] [-u|--unbuffered] [GREP-OPTIONS ...] -e|--regexp PATTERN|-f|--file FILE [...] [-]N [...]'
-    printf 'Usage: %q %s\n' "$(basename "$1")" '-i|--input FILESPEC [...] GREP-OPTIONS [...] [-]N [...] [-?|-h|--help]'
+    printf 'Usage: %q %s\n' "$(basename "$1")" '-I|--input FILESPEC [...] GREP-OPTIONS [...] [-]N [...] [-?|-h|--help]'
     echo
     cat <<HELPTEXT
 Print lines where any but the passed field(s) N (-N counted from behind), separated by FS, match a PATTERN.
 HELPTEXT
     echo
     printf 'Usage: cat FILE [...] | %q %s\n' "$(basename "$1")" '[-F|--field-separator FS] [-u|--unbuffered] -V|--invert-fields [GREP-OPTIONS ...] -e|--regexp PATTERN|-f|--file FILE [...] [-]N [...]'
-    printf 'Usage: %q %s\n' "$(basename "$1")" '-i|--input FILESPEC [...] -V|--invert-fields GREP-OPTIONS [...] [-]N [...] [-?|-h|--help]'
+    printf 'Usage: %q %s\n' "$(basename "$1")" '-I|--input FILESPEC [...] -V|--invert-fields GREP-OPTIONS [...] [-]N [...] [-?|-h|--help]'
 }
 
 addPattern()
@@ -94,7 +94,7 @@ do
 	--file|-f)		addPatternFile "$1" "$2"; shift; shift;;
 	--file=*)		addPatternFile --file "${1#--file=}"; shift;;
 
-	--input|-i)		shift; awkArgs+=("$1"); shift;;
+	--input|-I)		shift; awkArgs+=("$1"); shift;;
 	--invert-fields|-V)	shift; isInvertFields=t;;
 	--field-separator|-F)	shift; fsArgs=(-F "$1"); fieldSeparator="$1"; shift;;
 	--unbuffered|-u)	shift; isBuffered=''; grepBufferedArgs=(--line-buffered);;
