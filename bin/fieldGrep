@@ -65,7 +65,7 @@ do
     esac
 done
 if [ ${#grepPatternArgs[@]} -eq 0 ]; then
-    echo 'ERROR: No GREP-OPTIONS passed.'
+    echo 'ERROR: No PATTERN(s) passed.'
     echo
     printUsage "$0"
     exit 2

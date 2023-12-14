@@ -10,7 +10,7 @@
 @test "missing regexp prints an error message" {
     run fieldGrep --input "${BATS_TEST_DIRNAME}/tabbed.txt" 2
     [ $status -eq 2 ]
-    [ "${lines[0]}" = "ERROR: No GREP-OPTIONS passed." ]
+    [ "${lines[0]}" = "ERROR: No PATTERN(s) passed." ]
     [ "${lines[3]%% *}" = "Usage:" ]
 }
 
