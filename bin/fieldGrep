@@ -19,8 +19,45 @@ HELPTEXT
     printf 'Usage: %q %s\n' "$(basename "$1")" '-i|--input FILESPEC [...] -V|--invert-fields GREP-OPTIONS [...] [-]N [...] [-?|-h|--help]'
 }
 
+addPattern()
+{
+    if [ "$isLineRegexp" ]; then
+	if [ "$isFixedStrings" ]; then
+	    literalPattern="$(toLiteralRegexp "${grepRegexpDialectArgs[@]}" --line-regexp "$2")" || exit 3
+	    grepPatternArgs+=("$1" "$literalPattern")
+	    grepFixedStringsArgs=()
+	else
+	    grepPatternArgs+=("$1" "^\\(${2}\\)\$")
+	fi
+    else
+	grepPatternArgs+=("$1" "$2")
+    fi
+}
+
+typeset -a tempfiles=()
+addPatternFile()
+{
+    if [ "$isLineRegexp" ]; then
+	tempFilespec="$(mktemp --tmpdir "$(basename -- "$0")-XXXXXX" 2>/dev/null || echo "${TMPDIR:-/tmp}/$(basename -- "$0").$$$RANDOM")"
+
+	if [ "$isFixedStrings" ]; then
+	    toLiteralRegexp "${grepRegexpDialectArgs[@]}" --line-regexp -- "$2" >"$tempFilespec" || exit 3
+	    grepFixedStringsArgs=()
+	else
+	    sed -e 's/.*/^\\(&\\)$/' -- "$2" >"$tempFilespec"
+	fi
+	grepPatternArgs+=("$1" "$tempFilespec")
+
+	tempfiles+=("$tempFilespec")
+	[ "${DEBUG:-}" ] || trap 'rm -f -- "${tempfiles[@]}" 2>/dev/null' EXIT
+    else
+	grepPatternArgs+=("$1" "$2")
+    fi
+}
+
 isBuffered=t
 typeset -a grepArgs=()
+typeset -a grepRegexpDialectArgs=()
 typeset -a grepBufferedArgs=()
 [ -t 1 ] && grepBufferedArgs=(--line-buffered)
 typeset -a grepPatternArgs=()
@@ -32,27 +69,30 @@ isInvertFields=
 isOnlyMatching=
 isPerlRegexp=
 isFixedStrings=
+typeset -a grepFixedStringsArgs=()
+isLineRegexp=
 isWordRegexp=
 while [ $# -ne 0 ]
 do
     case "$1" in
 	--help|-h|-\?)		shift; printUsage "$0"; exit 0;;
 
-	-+([EGi]))		grepArgs+=("$1"); shift;;
-	--@(extended-regexp|basic-regexp|ignore-case))
-				grepArgs+=("$1"); shift;;
-	--fixed-strings)	grepArgs+=("$1"); [ "$fieldSeparator" = '[	 ]' ] && fieldSeparator=' '; shift; isFixedStrings=t;;
-	--perl-regexp|-P)	grepArgs+=("$1"); isPerlRegexp=t; shift;;
+	-+([EG]))		grepRegexpDialectArgs+=("$1"); shift;;
+	--@(extended-regexp|basic-regexp))
+				grepRegexpDialectArgs+=("$1"); shift;;
+	--perl-regexp|-P)	grepRegexpDialectArgs+=("$1"); isPerlRegexp=t; shift;;
+
+	--ignore-case|-i)	grepArgs+=("$1"); shift;;
+	--fixed-strings)	grepFixedStringsArgs+=("$1"); shift; isFixedStrings=t;;
 	--word-regexp|-w)	grepArgs+=("$1"); separatorGrepArgs=(-e '^[0-9][0-9]*'); shift; isWordRegexp=t;;    # A (usually) non-word separator won't be matched; need to aim for the leading field number to include the unfiltered fields.
-	--line-regexp|-x)	echo >&2 'ERROR: -x|--line-regexp is not supported; use explicit anchoring with ^ and $.'
-				exit 2
-				;;
+	--line-regexp|-x)	shift; isLineRegexp=t;;
 	--invert-match|-v)	grepArgs+=("$1"); separatorGrepArgs=(); shift;;	# Because of the inversion, we must not match the separators now so that they get included.
 	--only-matching|-o)	grepArgs+=("$1"); isOnlyMatching=t; shift;;
-	--regexp|-e)		grepPatternArgs+=("$1" "$2"); shift; shift;;
-	--regexp=*)		grepPatternArgs+=(--regexp "${1#--regexp=}"); shift;;
-	--file|-f)		grepPatternArgs+=("$1" "$2"); shift; shift;;
-	--file=*)		grepPatternArgs+=("$1"); shift;;
+
+	--regexp|-e)		addPattern "$1" "${2:?}"; shift; shift;;
+	--regexp=*)		addPattern --regexp "${1#--regexp=}"; shift; shift;;
+	--file|-f)		addPatternFile "$1" "$2"; shift; shift;;
+	--file=*)		addPatternFile --file "${1#--file=}"; shift;;
 
 	--input|-i)		shift; awkArgs+=("$1"); shift;;
 	--invert-fields|-V)	shift; isInvertFields=t;;
@@ -64,6 +104,11 @@ do
 	*)			break;;
     esac
 done
+if [ ${#grepFixedStringsArgs[@]} -gt 0 ]; then
+    # When literal matching is active (and not just emulated as with --line-regexp),
+    # the field separator pattern must be converted to a literal space.
+    [ "$fieldSeparator" = '[	 ]' ] && fieldSeparator=' '
+fi
 if [ ${#grepPatternArgs[@]} -eq 0 ]; then
     echo 'ERROR: No PATTERN(s) passed.'
     echo
@@ -73,6 +118,9 @@ elif [ $# -eq 0 ]; then
     echo 'ERROR: No field number N passed.'
     echo
     printUsage "$0"
+    exit 2
+elif [ "$isLineRegexp" ] && [ "$isWordRegexp" ]; then
+    echo 'ERROR: -l|--line-regexp cannot be combined with -w|--word-regexp.'
     exit 2
 elif [ "$isFixedStrings" ] && [ "$isWordRegexp" ]; then
     echo 'ERROR: --fixed-strings cannot be combined with -w|--word-regexp.'
@@ -137,7 +185,7 @@ NR == 1 {
     if (isUnBuffered) fflush()
 }
 ' "${awkArgs[@]}" | \
-    grep "${grepArgs[@]}" "${grepBufferedArgs[@]}" "${separatorGrepArgs[@]}" "${grepPatternArgs[@]}" | \
+    grep "${grepRegexpDialectArgs[@]}" "${grepFixedStringsArgs[@]}" "${grepArgs[@]}" "${grepBufferedArgs[@]}" "${separatorGrepArgs[@]}" "${grepPatternArgs[@]}" | \
 awk "${fsArgs[@]}" \
     -v "isBuffered=$isBuffered" \
 '
