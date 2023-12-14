@@ -34,6 +34,27 @@ addPattern()
     fi
 }
 
+typeset -a tempfiles=()
+addPatternFile()
+{
+    if [ "$isLineRegexp" ]; then
+	tempFilespec="$(mktemp --tmpdir "$(basename -- "$0")-XXXXXX" 2>/dev/null || echo "${TMPDIR:-/tmp}/$(basename -- "$0").$$$RANDOM")"
+
+	if [ "$isFixedStrings" ]; then
+	    toLiteralRegexp "${grepRegexpDialectArgs[@]}" --line-regexp -- "$2" >"$tempFilespec" || exit 3
+	    grepFixedStringsArgs=()
+	else
+	    sed -e 's/.*/^\\(&\\)$/' -- "$2" >"$tempFilespec"
+	fi
+	grepPatternArgs+=("$1" "$tempFilespec")
+
+	tempfiles+=("$tempFilespec")
+	[ "${DEBUG:-}" ] || trap 'rm -f -- "${tempfiles[@]}" 2>/dev/null' EXIT
+    else
+	grepPatternArgs+=("$1" "$2")
+    fi
+}
+
 isBuffered=t
 typeset -a grepArgs=()
 typeset -a grepRegexpDialectArgs=()
@@ -70,8 +91,8 @@ do
 
 	--regexp|-e)		addPattern "$1" "${2:?}"; shift; shift;;
 	--regexp=*)		addPattern --regexp "${1#--regexp=}"; shift; shift;;
-	--file|-f)		grepPatternArgs+=("$1" "$2"); shift; shift;;
-	--file=*)		grepPatternArgs+=("$1"); shift;;
+	--file|-f)		addPatternFile "$1" "$2"; shift; shift;;
+	--file=*)		addPatternFile --file "${1#--file=}"; shift;;
 
 	--input|-i)		shift; awkArgs+=("$1"); shift;;
 	--invert-fields|-V)	shift; isInvertFields=t;;
