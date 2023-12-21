@@ -209,13 +209,6 @@ function getFieldNr(field, originalNF,      isFromBehind)
 	    : field \
     )
 }
-function insert(fieldNr, expression,      i)
-{
-    for (i = NF; i > fieldNr; --i) {
-	$(i + 1) = $i
-    }
-    $(fieldNr + 1) = expression
-}
 BEGIN {
     # Return dict sorted by fieldNumbers, from right to left.
     PROCINFO["sorted_in"] = "@ind_num_desc"
