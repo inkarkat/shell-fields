@@ -56,6 +56,6 @@ eof	XYZ" ]
 bar	no4XYZ	201
 	XZ	Y	
 bzz	XZ	Y	last
-Y	XZ
-eofY	XZ" ]
+	XZ
+eof	XZ" ]
 }

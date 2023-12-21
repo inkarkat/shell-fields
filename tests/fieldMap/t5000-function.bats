@@ -36,6 +36,6 @@ foobarbzzeof" ]
 BAR	no4	[201]
 			[]
 BZZ			[LAST]
-[]
+
 [EOF]" ]
 }

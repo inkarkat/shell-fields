@@ -34,8 +34,8 @@ eof	EOF" ]
 BAR	no4	2
 			3
 BZZ			4
-5
-6" ]
+
+5" ]
 }
 
 @test "same coproc for multiple fields is reused, not instantiated twice" {
@@ -46,8 +46,8 @@ BZZ			4
 3	no4	4
 5			6
 7			8
-10
-12" ]
+9
+11" ]
 }
 
 @test "reuse of coproc can be prevented by adding whitespace" {
@@ -59,5 +59,5 @@ BZZ			4
 3			3
 4			4
 5
-6" ]
+5" ]
 }

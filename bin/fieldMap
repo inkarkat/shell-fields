@@ -197,10 +197,10 @@ function evaluateExpression(fieldNr, fieldNrSequence)
     printf "ASSERT: Expression for field %d did not match.", fieldNr > "/dev/stderr"
     exit(3)
 }
-function getFieldNr(field)
+function getFieldNr(field, originalNF)
 {
     field = 0 + field
-    return (field < 0 ? NF + field + 1 : field)
+    return (field < 0 ? originalNF + field + 1 : field)
 }
 function insert(fieldNr, expression,      i)
 {
@@ -241,8 +241,9 @@ NR == 1 {
 {
 '"${filterCode[*]}"'
     delete fieldNrSequences
+    originalNF = NF
     for (n = 1; n <= N; ++n) {
-	fieldNr = getFieldNr(fields[n])
+	fieldNr = getFieldNr(fields[n], originalNF)
 	if (fieldNr >= 1) {
 	    $fieldNr = evaluateExpression(fieldNr, ++fieldNrSequences[fieldNr])
 	}
