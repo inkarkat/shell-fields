@@ -118,7 +118,7 @@ done
 if [ "$isInPlace" ] && [ $# -gt 1 ]; then
     # Multiple in-place FILEs need to be processed individually to have separate
     # sets; we might as well do that with recursive invocations of ourselves.
-    EACHFILE_FILE_MARKER='' exec eachFile --worst-status -- \
+    EACHFILE_FILE_MARKER='' exec eachFile --worst-status \
 	"${BASH_SOURCE[0]}" "${allOptions[@]}" -- "$@"
 fi
 
