@@ -21,11 +21,12 @@ printLongUsage()
     # This is the long "man page" when launched with the help argument.
     # It is printed to stdout to allow paging with 'more'.
     cat <<HELPDESCRIPTION
-Add a field with AWK-EXPR after every field N (-N counted from behind), counting
-as they originally existed. Non-existing fields at the end are created; field 0
-means appending at the front; negative field numbers are ignored. Application happens
-in argument order from left to right; when multiple expressions target the same
-field, the first expression wins; following expressions are discarded.
+Add a field with AWK-EXPR after every field N (+/-N counted from behind),
+counting as they originally existed, but new fields at the end append from the
+current last field. Non-existing fields at the end are created; field 0 means
+appending at the front. Application happens in argument order from left to
+right; when multiple expressions target the same existing field, the first
+expression wins; following expressions are discarded.
 HELPDESCRIPTION
     echo
     printShortUsage "$1"
@@ -64,6 +65,7 @@ typeset -a expressionCode=()
 unset skipValue
 isInPlace=
 inPlaceExtension=
+let appendCnt=1	# Offset for addressing fields appending after the last field.
 while [ $# -ne 0 ]
 do
     case "$1" in
@@ -74,9 +76,13 @@ do
 	--skip-value|-s)	shift; skipValue="$1"; shift;;
 	-i|--in-place)		isInPlace=t; shift;;
 	-i?*|--in-place=*)	isInPlace=t; inPlaceExtension="${1#-i}"; inPlaceExtension="${inPlaceExtension#--in-place=}"; shift;;
-	?(-)+([0-9]))		fields+=("$1")
+	?([+-])+([0-9]))	fields+=("$1")
 				case "$1" in
 				    -*)	expressionCode+=("if (fieldNr == NF - ${1#-} + 1) return $2");;
+				    +*)	expressionCode+=("if (fieldNr == NF + $appendCnt + ${1#+}) return $2")
+					let appendCnt+=1    # Next offset for appending.
+					let appendCnt+=${1#+}	# Consider appended empty fields, too.
+					;;
 				    *)	expressionCode+=("if (fieldNr == $1) return $2");;
 				esac
 				shift; shift
@@ -87,7 +93,7 @@ do
     esac
 done
 if [ ${#fields[@]} -eq 0 ]; then
-    echo 'ERROR: No [-]N AWK-EXPR passed.'
+    echo 'ERROR: No [+-]N AWK-EXPR passed.'
     echo
     printUsage "$0"
     exit 2
@@ -110,11 +116,6 @@ function evaluateExpression(fieldNr)
     printf "ASSERT: Expression for field %d did not match.", fieldNr > "/dev/stderr"
     exit(3)
 }
-function getFieldNr(field)
-{
-    field = 0 + field
-    return (field < 0 ? NF + field + 1 : field)
-}
 function insert(fieldNr, expression,      i)
 {
     for (i = NF; i > fieldNr; --i) {
@@ -122,10 +123,11 @@ function insert(fieldNr, expression,      i)
     }
     $(fieldNr + 1) = expression
 }
+function max(n1, n2)
+{
+    return n1 > n2 ? n1 : n2
+}
 BEGIN {
-    # Return dict sorted by fieldNumbers, from right to left.
-    PROCINFO["sorted_in"] = "@ind_num_desc"
-
     N = split(fieldList, fields, "\n")
 }
 NR == 1 {
@@ -141,19 +143,45 @@ NR == 1 {
     }
 }
 {
-    delete fieldToExpression
+    # In order to maintain the references to the original field numbers, first just
+    # evaluate into arrays (leaving $0 / NF unchanged).
+    delete addedFieldToExpression
+    delete appendedFieldToExpression
+    appendCnt = 1
     for (n = 1; n <= N; ++n) {
-	fieldNr = getFieldNr(fields[n])
+	isAppendAfterBehind = (fields[n] ~ /^\+/)
+	fieldNr = 0 + fields[n]
+	fieldNr = (fieldNr < 0 \
+	    ? NF + fieldNr + 1 \
+	    : isAppendAfterBehind \
+		? NF + appendCnt + fieldNr \
+		: fieldNr \
+	)
 	if (fieldNr >= 0) {
 	    value = evaluateExpression(fieldNr)
 	    if (! hasSkipValue || value != skipValue) {
-		fieldToExpression[fieldNr] = value
+		if (isAppendAfterBehind) {
+		    appendedFieldToExpression[fieldNr] = value
+		    appendCnt += 1 + max(0, fieldNr - 1 - NF)	# Consider appended empty fields, too; this is needed to maintain the correct ordering.
+		} else {
+		    addedFieldToExpression[fieldNr] = value
+		}
 	    }
 	}
     }
 
-    for (field in fieldToExpression) {
-	insert(field, fieldToExpression[field])
+    # Apply the evaluated expressions to the original fields, starting with the
+    # additions to existing fields.
+    PROCINFO["sorted_in"] = "@ind_num_desc" # Add to existing fields from right to left, to avoid applying offsets.
+    addedFieldCnt = 0
+    for (field in addedFieldToExpression) {
+	insert(field, addedFieldToExpression[field])
+	++addedFieldCnt
+    }
+    # Append new fields after the last field.
+    PROCINFO["sorted_in"] = "@ind_num_asc"  # Append new fields from left to right, so that gaps are considered.
+    for (field in appendedFieldToExpression) {
+	insert(field + addedFieldCnt - 1, appendedFieldToExpression[field])
     }
 
     print
