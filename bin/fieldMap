@@ -4,7 +4,7 @@ shopt -qs extglob
 printShortUsage()
 {
     local awkExpr='(AWK-EXPR | "[AWK-EXPR][+]|COMMAND")'
-    local awkFilterOrFieldAndExpr="-x|--filter $awkExpr | [-]N $awkExpr"
+    local awkFilterOrFieldAndExpr="-x|--filter $awkExpr | [+-]N $awkExpr"
     # Note: short followed by long option; if the user knows the short one, she can
     # skim the long one.
     printf 'Usage: cat FILE [...] | %q %s\n' "$(basename "$1")" "[-F|--field-separator FS] [-v|--assign var=val [-v ...]] [-u|--unbuffered] [-E|--coprocess-error abort|ignore [--coprocess-error-value TEXT]|restart] [-f|--function 'FUNCTION-NAME { ... }' [-f ...]] ($awkFilterOrFieldAndExpr) [...]"
@@ -23,9 +23,9 @@ printLongUsage()
     # This is the long "man page" when launched with the help argument.
     # It is printed to stdout to allow paging with 'more'.
     cat <<HELPDESCRIPTION
-Transform a field N (-N counted from behind) with AWK-EXPR. Application happens
-in argument order from left to right; when multiple expressions target the same
-field, each is applied once.
+Transform a field N (+/-N counted from behind) with AWK-EXPR. Application
+happens in argument order from left to right; when multiple expressions target
+the same field, each is applied once.
 HELPDESCRIPTION
     echo
     printShortUsage "$1"
@@ -140,10 +140,11 @@ do
 				;;
 	-i|--in-place)		isInPlace=t; shift;;
 	-i?*|--in-place=*)	isInPlace=t; inPlaceExtension="${1#-i}"; inPlaceExtension="${inPlaceExtension#--in-place=}"; shift;;
-	?(-)+([0-9]))		fields+=("$1")
+	?([+-])+([0-9]))	fields+=("$1")
 				parseExpression '$fieldNr' "$2"
 				case "$1" in
-				    -*)	expressionCode+=("if (fieldNr == NF - ${1#-} + 1 && --fieldNrSequence == 0) return $awkExpr");;
+				    -*)	expressionCode+=("if (fieldNr == originalNF - ${1#-} + 1 && --fieldNrSequence == 0) return $awkExpr");;
+				    +*)	expressionCode+=("if (fieldNr == originalNF + ${1#+} && --fieldNrSequence == 0) return $awkExpr");;
 				    *)	expressionCode+=("if (fieldNr == $1 && --fieldNrSequence == 0) return $awkExpr");;
 				esac
 				shift; shift
@@ -191,16 +192,22 @@ function pipeThrough(input, coproc,      result)
     }
     return result
 }
-function evaluateExpression(fieldNr, fieldNrSequence)
+function evaluateExpression(fieldNr, fieldNrSequence, originalNF)
 {
 '"${expressionCode[*]}"'
     printf "ASSERT: Expression for field %d did not match.", fieldNr > "/dev/stderr"
     exit(3)
 }
-function getFieldNr(field, originalNF)
+function getFieldNr(field, originalNF,      isFromBehind)
 {
+    isFromBehind = (field ~ /^\+/)
     field = 0 + field
-    return (field < 0 ? originalNF + field + 1 : field)
+    return (field < 0 \
+	? originalNF + field + 1 \
+	: isFromBehind \
+	    ? originalNF + field \
+	    : field \
+    )
 }
 function insert(fieldNr, expression,      i)
 {
@@ -245,7 +252,7 @@ NR == 1 {
     for (n = 1; n <= N; ++n) {
 	fieldNr = getFieldNr(fields[n], originalNF)
 	if (fieldNr >= 1) {
-	    $fieldNr = evaluateExpression(fieldNr, ++fieldNrSequences[fieldNr])
+	    $fieldNr = evaluateExpression(fieldNr, ++fieldNrSequences[fieldNr], originalNF)
 	}
     }
 
