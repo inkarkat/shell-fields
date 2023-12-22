@@ -2,12 +2,13 @@
 set -o pipefail
 shopt -qs extglob
 
+: ${EACHFIELD_EXEC_END=;}
 : ${EACHFIELD_FILE_MARKER='{}'}
 fileMarker="$EACHFIELD_FILE_MARKER"; unset EACHFIELD_FILE_MARKER
 
 printShortUsage()
 {
-    printf 'Usage: cat FILE [...] | %q %s\n' "$(basename "$1")" "[-F|--field-separator FS] [--separator|-s SEP] [(--pass | -c|--command \"COMMANDLINE\" [...] | --exec SIMPLECOMMAND [...] ${fileMarker:+[}${fileMarker}${fileMarker:+] [...]} ; [...]) [[-]N[,[-]M,...] [...]]] [...]"
+    printf 'Usage: cat FILE [...] | %q %s\n' "$(basename "$1")" "[-F|--field-separator FS] [--separator|-s SEP] [(--pass | -c|--command \"COMMANDLINE\" [...] | --exec SIMPLECOMMAND [...] ${fileMarker:+[}${fileMarker}${fileMarker:+] [...]} $EACHFIELD_EXEC_END [...]) [[-]N[,[-]M,...] [...]]] [...]"
     echo
     printf 'Usage: %q %s\n' "$(basename "$1")" '... [-i[SUFFIX]|--in-place[=SUFFIX]] [--] [FILE ...] [-?|-h|--help]'
 }
@@ -42,10 +43,10 @@ HELPDESCRIPTION
 			${fileMarker:+either }are piped into it${fileMarker:+ or a $fileMarker marker inside
 			COMMANDLINE is replaced with a temp file containing the
 			field rows}.
-    --exec COMMAND [...] ;
+    --exec COMMAND [...] $EACHFIELD_EXEC_END
 			Execute COMMAND; all following arguments are taken to be
 			arguments to the COMMAND until an argument consisting of
-			';' is encountered. Preceding field rows ${fileMarker:+either }are
+			'${EACHFIELD_EXEC_END}' is encountered. Preceding field rows ${fileMarker:+either }are
 			piped into it${fileMarker:+ or a $fileMarker marker inside COMMANDLINE is
 			replaced with a temp file containing the field rows}.
 
@@ -92,14 +93,14 @@ do
 	--exec)		allOptions+=("$1"); shift
 			cmd=
 			printf -v escapedFileMarker %q "$fileMarker"
-			while [ $# -gt 0 -a "$1" != ';' ]
+			while [ $# -gt 0 -a "$1" != "$EACHFIELD_EXEC_END" ]
 			do
 			    printf -v quotedArg '%q' "$1"
 			    cmd="${cmd}${cmd:+ }${quotedArg//"$escapedFileMarker"/$fileMarker}"	# %q escapes {}, we don't want that to have it interpolated later.
 			    allOptions+=("$1"); shift
 			done
 			if [ $# -eq 0 ]; then
-			    echo 'ERROR: --exec command must be concluded with ;!'; echo; printUsage "$0"
+			    echo "ERROR: --exec command must be concluded with '${EACHFIELD_EXEC_END}'"; echo; printUsage "$0"
 			    exit 2
 			fi >&2
 			allOptions+=("$1"); shift
