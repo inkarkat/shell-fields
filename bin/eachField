@@ -8,7 +8,7 @@ fileMarker="$EACHFIELD_FILE_MARKER"; unset EACHFIELD_FILE_MARKER
 
 printShortUsage()
 {
-    printf 'Usage: cat FILE [...] | %q %s\n' "$(basename "$1")" "[-F|--field-separator FS] [--separator|-s SEP] [(--pass | -c|--command \"COMMANDLINE\" [...] | --exec SIMPLECOMMAND [...] ${fileMarker:+[}${fileMarker}${fileMarker:+] [...]} $EACHFIELD_EXEC_END [...]) [[-]N[,[-]M,...] [...]]] [...]"
+    printf 'Usage: cat FILE [...] | %q %s\n' "$(basename "$1")" "[-F|--field-separator FS] [--separator|-s SEP] [(--pass | -c|--command \"COMMANDLINE\" [-c ...] | --exec SIMPLECOMMAND [...] ${fileMarker:+[}${fileMarker}${fileMarker:+] [...]} $EACHFIELD_EXEC_END [--exec ...]) [[-]N[,[-]M,...] [...]]] [...]"
     echo
     printf 'Usage: %q %s\n' "$(basename "$1")" '... [-i[SUFFIX]|--in-place[=SUFFIX]] [--] [FILE ...] [-?|-h|--help]'
 }
