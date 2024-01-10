@@ -59,7 +59,7 @@ HELPTEXT
     cat <<HELPTEXT
     --between-command BETWEEN-COMMAND
 			Execute BETWEEN-COMMAND in between each COMMAND
-			execution.
+			execution. The last COMMAND's exit status is in \$?.
     --command|-c CMD	The command line to be executed. When this is a simple
 			command, it can also be passed as such. Read arguments
 			are appended${argMarker:+ or replace the string $argMarker}.
@@ -146,6 +146,11 @@ if [ "$hasProgressNotification" ] && [ -n "$progressSink" ]; then
 else
     reportProgress() { :; }
 fi
+
+setStatus()
+{
+    return ${1:-0}
+}
 
 parseFields()
 {
@@ -240,7 +245,7 @@ case "$with" in
 	    readArgs || continue
 
 	    if [ ! "$isFirst" ] && [ -n "$betweenCommand" ]; then
-		eval "$betweenCommand" <&3 || { exitStatus=$?; if [ $exitStatus -gt $status ]; then status=$exitStatus; fi; }
+		setStatus $exitStatus; eval "$betweenCommand" <&3 || { exitStatus=$?; if [ $exitStatus -gt $status ]; then status=$exitStatus; fi; }
 	    fi
 
 	    buildHeaderAndInterpolatedCommands
