@@ -1,5 +1,6 @@
 #!/bin/bash
 
+: ${FIELDSTOARGS_COMMAND_JOINER=;}
 : ${FIELDSTOARGS_LINE_WHAT=line}
 : ${FIELDSTOARGS_ARG_MARKER='{}'}
 argMarker="$FIELDSTOARGS_ARG_MARKER"; unset FIELDSTOARGS_ARG_MARKER
@@ -70,7 +71,7 @@ typeset -a awkArgs=()
 isRunIfEmpty=
 headerIndex=
 isRemoveHeaderField=
-typeset -a commands=()
+commands=
 progressSink=
 with=
 errorRedir='2>&1'
@@ -89,7 +90,7 @@ do
 			isRemoveHeaderField=t;&
 	--header-field)	shift; headerIndex="$((${1:?} - 1))"; shift;;
 
-	--command|-c)	shift; commands+=(${commands:+;} "$1"); shift;;
+	--command|-c)	shift; commands+="${commands:+ $FIELDSTOARGS_COMMAND_JOINER }$1"; shift;;
 
 	--progress)	shift; progressSink="$1"; shift;;
 	--with-header)	shift; with=header;;
@@ -116,9 +117,9 @@ if [ $# -ne 0 ]; then
     # undo the effects of eval.
     printf -v quotedSimpleCommand '%q ' "$@"
     printf -v escapedArgMarker %q "$argMarker"
-    commands+=(${commands:+;} "${quotedSimpleCommand//"$escapedArgMarker"/$argMarker}")	# %q escapes {}, we don't want that to have it interpolated later.
+    commands+="${commands:+ $FIELDSTOARGS_COMMAND_JOINER }${quotedSimpleCommand//"$escapedArgMarker"/$argMarker}"	# %q escapes {}, we don't want that to have it interpolated later.
 fi
-if [ ${#commands[@]} -eq 0 ]; then
+if [ -z "$commands" ]; then
     echo 'ERROR: No COMMAND(s) specified; need to pass -c|--command "COMMANDLINE", or SIMPLECOMMAND.'
     echo
     printUsage "$0"
@@ -173,7 +174,7 @@ readArgs()
     fi
 }
 
-typeset -a interpolatedCommands=()
+interpolatedCommands=
 buildHeaderAndInterpolatedCommands()
 {
     if [ -n "$headerIndex" ]; then
@@ -184,8 +185,8 @@ buildHeaderAndInterpolatedCommands()
     fi
 
     local quotedArgs; printf -v quotedArgs '%q ' "${args[@]}"; quotedArgs="${quotedArgs% }"
-    interpolatedCommands=("${commands[@]//"$argMarker"/$quotedArgs}")
-    [ "${interpolatedCommands[*]}" = "${commands[*]}" ] && interpolatedCommands+=("$quotedArgs")
+    interpolatedCommands="${commands//"$argMarker"/$quotedArgs}"
+    [ "$interpolatedCommands" = "$commands" ] && interpolatedCommands+=" $quotedArgs"
 }
 
 isFirst=t
@@ -208,7 +209,7 @@ case "$with" in
 	    buildHeaderAndInterpolatedCommands
 	    [ -z "$header" ] || reportProgress "$header"
 
-	    printf '%s ' "${interpolatedCommands[@]}"
+	    printf '%s ' "$interpolatedCommands"
 	    printf '\n'
 	    isFirst=
 	done | ${with:?} "${runWithPromptArgs[@]}"
@@ -230,7 +231,7 @@ case "$with" in
 	    buildHeaderAndInterpolatedCommands
 	    [ -z "$header" ] || reportProgress "$header"
 
-	    (eval "${isHeader:+{}" "${interpolatedCommands[@]}" "${isHeader:+; \} $errorRedir | withHeader "${colorArg[@]}" --id '$FIELDSTOARGS_HEADER_ID' -- '${header:-(empty)}'}") <&3 || \
+	    (eval "${isHeader:+{}" "$interpolatedCommands" "${isHeader:+; \} $errorRedir | withHeader "${colorArg[@]}" --id '$FIELDSTOARGS_HEADER_ID' -- '${header:-(empty)}'}") <&3 || \
 		{ exitStatus=$?; if [ $exitStatus -gt $status ]; then status=$exitStatus; fi; }
 	    isFirst=
 	done < <(parseFields)
