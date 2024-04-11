@@ -5,8 +5,8 @@ BEGIN {
 	print "Rotates field columns and rows clockwise (counter-clockwise with --reverse)"
 	print "by 90 degrees."
 	print ""
-	print "Usage: fieldrot90 [--reverse] FILE [...] [-?|-H|--man|--usage]"
-	print "Usage: cat FILE [...] | fieldrot90 [--reverse]"
+	print "Usage: fieldrot90 [-F|--field-separator FS] [--reverse] FILE [...] [-?|-H|--man|--usage]"
+	print "Usage: cat FILE [...] | fieldrot90 [-F|--field-separator FS] [--reverse]"
 	exit
     } else if (ARGV[1] == "--reverse") {
 	isReverse = 1
