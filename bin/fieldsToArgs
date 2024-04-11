@@ -1,4 +1,5 @@
 #!/bin/bash
+set -o pipefail
 
 : ${FIELDSTOARGS_COMMAND_JOINER=;}
 : ${FIELDSTOARGS_LINE_WHAT=line}
