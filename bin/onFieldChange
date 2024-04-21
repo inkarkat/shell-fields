@@ -16,7 +16,7 @@ newLineMarker="$ONFIELDCHANGE_NEW_LINE_MARKER"; unset ONFIELDCHANGE_NEW_LINE_MAR
 
 printShortUsage()
 {
-    printf 'Usage: cat FILE [...] | %q %s\n' "$(basename "$1")" "[-F|--field-separator FS] [--separator|-s SEP] [-u|--unbuffered] [--include-first] -c|--command \"COMMANDLINE\" [-c ...] | --exec SIMPLECOMMAND [...] ${lineNumberMarker:+[}${lineNumberMarker}${lineNumberMarker:+]} ${previousValueMarker:+[}${previousValueMarker}${previousValueMarker:+]} ${newValueMarker:+[}${newValueMarker}${newValueMarker:+]} ${previousLineMarker:+[}${previousLineMarker}${previousLineMarker:+]} ${newLineMarker:+[}${newLineMarker}${newLineMarker:+]} [...] $ONFIELDCHANGE_EXEC_END [--exec ...]) [-]N [...]"
+    printf 'Usage: cat FILE [...] | %q %s\n' "$(basename "$1")" "[-F|--field-separator FS] [--separator|-s SEP] [-u|--unbuffered] [--include-first] [--include-last] -c|--command \"COMMANDLINE\" [-c ...] | --exec SIMPLECOMMAND [...] ${lineNumberMarker:+[}${lineNumberMarker}${lineNumberMarker:+]} ${previousValueMarker:+[}${previousValueMarker}${previousValueMarker:+]} ${newValueMarker:+[}${newValueMarker}${newValueMarker:+]} ${previousLineMarker:+[}${previousLineMarker}${previousLineMarker:+]} ${newLineMarker:+[}${newLineMarker}${newLineMarker:+]} [...] $ONFIELDCHANGE_EXEC_END [--exec ...]) [-]N [...]"
     echo
     printf 'Usage: %q %s\n' "$(basename "$1")" '... [-i[SUFFIX]|--in-place[=SUFFIX]] [--] [FILE ...] [-?|-h|--help]'
 }
@@ -51,6 +51,7 @@ HELPDESCRIPTION
 			between resulting fields.
     --unbuffered|-u	Immediately output each read line.
     --include-first	Execute the command on the first field value, too.
+    --include-last	Execute the command on the last field value, too.
     --command|-c CMD	Execute CMD as a command-line.${markerUsage}
     --exec COMMAND [...] $ONFIELDCHANGE_EXEC_END
 			Execute COMMAND; all following arguments are taken to be
@@ -86,6 +87,7 @@ currentCommand=
 previousType=
 unset outputSeparator
 isIncludeFirst=
+isIncludeLast=
 while [ $# -ne 0 ]
 do
     case "$1" in
@@ -94,6 +96,7 @@ do
 			shift; isBuffered=;;
 	--include-first)
 			shift; isIncludeFirst=t;;
+	--include-last) shift; isIncludeLast=t;;
 	--command|-c)	shift; addCommand "${1:?}"; shift;;
 	--field-separator|-F)
 			awkArgs+=("$1" "$2"); shift; shift;;
@@ -148,6 +151,7 @@ fi
 IFS=$'\n'
 exec "${awkCall[@]}" "${awkArgs[@]}" \
     -v "isIncludeFirst=$isIncludeFirst" \
+    -v "isIncludeLast=$isIncludeLast" \
     -v "isBuffered=$isBuffered" \
     -v "lineNumberMarker=${lineNumberMarker//\\/\\\\}" \
     -v "previousValueMarker=${previousValueMarker//\\/\\\\}" \
@@ -221,5 +225,17 @@ NR == 1 {
 
     print
     if (! isBuffered) fflush()
+}
+END {
+    if (isIncludeLast) {
+	for (n = 1; n <= N; ++n) {
+	    fieldNr = getFieldNr(fieldSelectors[n])
+	    if (fieldNr >= 1) {
+		if ($fieldNr != SENTINEL) {
+		    execute(NR, $fieldNr, SENTINEL, $0, "", fieldCommands[n])
+		}
+	    }
+	}
+    }
 }
 ' "$@"
