@@ -16,7 +16,7 @@ newLineMarker="$ONFIELDCHANGE_NEW_LINE_MARKER"; unset ONFIELDCHANGE_NEW_LINE_MAR
 
 printShortUsage()
 {
-    printf 'Usage: cat FILE [...] | %q %s\n' "$(basename "$1")" "[-F|--field-separator FS] [--separator|-s SEP] [-u|--unbuffered] [--include-first] [--include-last] -c|--command \"COMMANDLINE\" [-c ...] | --exec SIMPLECOMMAND [...] ${lineNumberMarker:+[}${lineNumberMarker}${lineNumberMarker:+]} ${previousValueMarker:+[}${previousValueMarker}${previousValueMarker:+]} ${newValueMarker:+[}${newValueMarker}${newValueMarker:+]} ${previousLineMarker:+[}${previousLineMarker}${previousLineMarker:+]} ${newLineMarker:+[}${newLineMarker}${newLineMarker:+]} [...] $ONFIELDCHANGE_EXEC_END [--exec ...]) [-]N [...]"
+    printf 'Usage: cat FILE [...] | %q %s\n' "$(basename "$1")" "[-F|--field-separator FS] [--separator|-s SEP] [-u|--unbuffered] [--include-first] [--include-last] [--default-value VAL] -c|--command \"COMMANDLINE\" [-c ...] | --exec SIMPLECOMMAND [...] ${lineNumberMarker:+[}${lineNumberMarker}${lineNumberMarker:+]} ${previousValueMarker:+[}${previousValueMarker}${previousValueMarker:+]} ${newValueMarker:+[}${newValueMarker}${newValueMarker:+]} ${previousLineMarker:+[}${previousLineMarker}${previousLineMarker:+]} ${newLineMarker:+[}${newLineMarker}${newLineMarker:+]} [...] $ONFIELDCHANGE_EXEC_END [--exec ...]) [-]N [...]"
     echo
     printf 'Usage: %q %s\n' "$(basename "$1")" '... [-i[SUFFIX]|--in-place[=SUFFIX]] [--] [FILE ...] [-?|-h|--help]'
 }
@@ -52,6 +52,10 @@ HELPDESCRIPTION
     --unbuffered|-u	Immediately output each read line.
     --include-first	Execute the command on the first field value, too.
     --include-last	Execute the command on the last field value, too.
+    --default-value VAL	Use VAL for the change comparison of the first and last
+			line's field values. For example, pass 0 if you don't
+			want to trigger on a zero value, or an empty string if
+			you don't want to trigger on an empty field.
     --command|-c CMD	Execute CMD as a command-line.${markerUsage}
     --exec COMMAND [...] $ONFIELDCHANGE_EXEC_END
 			Execute COMMAND; all following arguments are taken to be
@@ -88,6 +92,7 @@ previousType=
 unset outputSeparator
 isIncludeFirst=
 isIncludeLast=
+defaultValue=$'\n'  # Sentinel value that cannot be part of the data.
 while [ $# -ne 0 ]
 do
     case "$1" in
@@ -97,6 +102,7 @@ do
 	--include-first)
 			shift; isIncludeFirst=t;;
 	--include-last) shift; isIncludeLast=t;;
+	--default-value) shift; defaultValue="${1?}"; shift;;
 	--command|-c)	shift; addCommand "${1:?}"; shift;;
 	--field-separator|-F)
 			awkArgs+=("$1" "$2"); shift; shift;;
@@ -152,6 +158,7 @@ IFS=$'\n'
 exec "${awkCall[@]}" "${awkArgs[@]}" \
     -v "isIncludeFirst=$isIncludeFirst" \
     -v "isIncludeLast=$isIncludeLast" \
+    -v "SENTINEL=${defaultValue//\\/\\\\}" \
     -v "isBuffered=$isBuffered" \
     -v "lineNumberMarker=${lineNumberMarker//\\/\\\\}" \
     -v "previousValueMarker=${previousValueMarker//\\/\\\\}" \
@@ -195,7 +202,6 @@ BEGIN {
 	print "Assert: Mismatch in number of commands and fields." > "/dev/stderr"
 	exit 3
     }
-    SENTINEL = "\n"	# Sentinel value that cannot be part of the data.
     for (n = 1; n <= N; ++n) {
 	previousValue[n] = SENTINEL
     }
@@ -214,7 +220,7 @@ NR == 1 {
 	fieldNr = getFieldNr(fieldSelectors[n])
 	if (fieldNr >= 1) {
 	    if (previousValue[n] != $fieldNr) {
-		if (previousValue[n] != SENTINEL || isIncludeFirst) {	# Do not execute the command on the first value by default.
+		if (NR > 1 || previousValue[n] != SENTINEL || isIncludeFirst) {	# Do not execute the command on the first value by default.
 		    execute(NR, previousValue[n], $fieldNr, previousLine, $0, fieldCommands[n])
 		}
 		previousValue[n] = $fieldNr
