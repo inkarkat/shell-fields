@@ -69,7 +69,7 @@ EXIT STATUS:
 
 Example:
 HELPTEXT
-    printf '%q %s\n' "$(basename "$1")" "-F : -s ' ' --exec minmax --separator .. \; 3 4 /etc/passwd"
+    printf 'ping google.com | %q %s\n' "$(basename "$1")" "--exec echo 'Change in what we got:' \; 1"
 }
 
 addCommand()
