@@ -1,0 +1,6 @@
+ramen	3
+ramen	5
+ramen	3
+penne	3
+ravioli	3
+ravioli	2

@@ -1,0 +1,265 @@
+#!/bin/bash
+set -o pipefail
+shopt -qs extglob
+
+: ${ONFIELDCHANGE_EXEC_END=;}
+: ${ONFIELDCHANGE_LINENUMBER_MARKER='{}'}
+: ${ONFIELDCHANGE_PREVIOUS_VALUE_MARKER='{-}'}
+: ${ONFIELDCHANGE_NEW_VALUE_MARKER='{+}'}
+: ${ONFIELDCHANGE_PREVIOUS_LINE_MARKER='{--}'}
+: ${ONFIELDCHANGE_NEW_LINE_MARKER='{++}'}
+lineNumberMarker="$ONFIELDCHANGE_LINENUMBER_MARKER"; unset ONFIELDCHANGE_LINENUMBER_MARKER
+previousValueMarker="$ONFIELDCHANGE_PREVIOUS_VALUE_MARKER"; unset ONFIELDCHANGE_PREVIOUS_VALUE_MARKER
+newValueMarker="$ONFIELDCHANGE_NEW_VALUE_MARKER"; unset ONFIELDCHANGE_NEW_VALUE_MARKER
+previousLineMarker="$ONFIELDCHANGE_PREVIOUS_LINE_MARKER"; unset ONFIELDCHANGE_PREVIOUS_LINE_MARKER
+newLineMarker="$ONFIELDCHANGE_NEW_LINE_MARKER"; unset ONFIELDCHANGE_NEW_LINE_MARKER
+
+printShortUsage()
+{
+    printf 'Usage: cat FILE [...] | %q %s\n' "$(basename "$1")" "[-F|--field-separator FS] [-u|--unbuffered] [--include-first] [--include-last] [--default-value VAL] [-R|--remove-fields] -c|--command \"COMMANDLINE\" [-c ...] | --exec SIMPLECOMMAND [...] ${lineNumberMarker:+[}${lineNumberMarker}${lineNumberMarker:+]} ${previousValueMarker:+[}${previousValueMarker}${previousValueMarker:+]} ${newValueMarker:+[}${newValueMarker}${newValueMarker:+]} ${previousLineMarker:+[}${previousLineMarker}${previousLineMarker:+]} ${newLineMarker:+[}${newLineMarker}${newLineMarker:+]} [...] $ONFIELDCHANGE_EXEC_END [--exec ...]) [-]N [...]"
+    echo
+    printf 'Usage: %q %s\n' "$(basename "$1")" '... [-i[SUFFIX]|--in-place[=SUFFIX]] [--] [FILE ...] [-?|-h|--help]'
+}
+printUsage()
+{
+    # This is the short help when launched with no or incorrect arguments.
+    # It is printed to stderr to avoid accidental processing.
+    printShortUsage "$1" >&2
+    printf >&2 '\nTry %q --help for more information.\n' "$(basename "$1")"
+}
+printLongUsage()
+{
+    # This is the long "man page" when launched with the help argument.
+    # It is printed to stdout to allow paging with 'more'.
+    cat <<HELPDESCRIPTION
+Execute COMMAND whenever a value of field(s) N (-N counted from behind),
+separated by FS, changes.
+HELPDESCRIPTION
+    echo
+    printShortUsage "$1"
+    echo
+    local markerUsage="
+			${lineNumberMarker}${lineNumberMarker:+ is replaced with the current line number.}
+			${previousValueMarker}${previousValueMarker:+ is replaced with the previous field value.}
+			${newValueMarker}${newValueMarker:+ is replaced with the new field value.}
+			${previousLineMarker}${previousLineMarker:+ is replaced with the previous line contents.}
+			${newLineMarker}${newLineMarker:+ is replaced with the new line contents.}"
+    cat <<HELPTEXT
+    --field-separator|-F FS
+			Use FS as the input field separator (as with AWK).
+    --unbuffered|-u	Immediately output each read line.
+    --include-first	Execute the command on the first field value, too.
+    --include-last	Execute the command on the last field value, too.
+    --default-value VAL	Use VAL for the change comparison of the first and last
+			line's field values. For example, pass 0 if you don't
+			want to trigger on a zero value, or an empty string if
+			you don't want to trigger on an empty field.
+    --remove-fields|-R	Remove the field(s) N that are used for change
+			detection from the output.
+    --command|-c CMD	Execute CMD as a command-line.${markerUsage}
+    --exec COMMAND [...] $ONFIELDCHANGE_EXEC_END
+			Execute COMMAND; all following arguments are taken to be
+			arguments to the COMMAND until an argument consisting of
+			'${ONFIELDCHANGE_EXEC_END}' is encountered.${markerUsage}
+EXIT STATUS:
+    0	Complete success.
+    2	Bad invocation, wrong or missing command-line arguments.
+    3	Internal error or failed assertion.
+    *   any exit status from COMMAND(s)
+
+Example:
+HELPTEXT
+    printf 'ping google.com | %q %s\n' "$(basename "$1")" "--exec echo 'Change in what we got:' \; 1"
+}
+
+addCommand()
+{
+    local cmd="${1:?}"; shift
+    [ "$previousType" = command ] || currentCommand=''
+    currentCommand+="${currentCommand:+ | }${cmd}"
+    previousType=command
+}
+
+isBuffered=t
+typeset -a awkArgs=()
+typeset -a awkCall=(awk)
+isInPlace=
+inPlaceExtension=
+typeset -a fieldSelectors=()
+typeset -a fieldCommands=()
+currentCommand=
+previousType=
+isIncludeFirst=
+isIncludeLast=
+defaultValue=$'\n'  # Sentinel value that cannot be part of the data.
+isRemove=
+while [ $# -ne 0 ]
+do
+    case "$1" in
+	--help|-h|-\?)	shift; printLongUsage "$0"; exit 0;;
+	--unbuffered|-u)
+			shift; isBuffered=;;
+	--include-first)
+			shift; isIncludeFirst=t;;
+	--include-last) shift; isIncludeLast=t;;
+	--default-value) shift; defaultValue="${1?}"; shift;;
+	--remove-fields|-R)
+			shift; isRemove=t;;
+	--command|-c)	shift; addCommand "${1:?}"; shift;;
+	--field-separator|-F)
+			awkArgs+=("$1" "$2"); shift; shift;;
+	-i|--in-place)	isInPlace=t; shift;;
+	-i?*|--in-place=*)
+			isInPlace=t; inPlaceExtension="${1#-i}"; inPlaceExtension="${inPlaceExtension#--in-place=}"; shift;;
+	--exec)		shift
+			cmd=
+			printf -v escapedLineNumberMarker %q "$lineNumberMarker"
+			printf -v escapedPreviousValueMarker %q "$previousValueMarker"
+			printf -v escapedNewValueMarker %q "$newValueMarker"
+			printf -v escapedPreviousLineMarker %q "$previousLineMarker"
+			printf -v escapedNewLineMarker %q "$newLineMarker"
+			while [ $# -gt 0 -a "$1" != "$ONFIELDCHANGE_EXEC_END" ]
+			do
+			    printf -v quotedArg '%q' "$1"
+			    quotedArg="${quotedArg//"$escapedLineNumberMarker"/$lineNumberMarker}"
+			    quotedArg="${quotedArg//"$escapedPreviousValueMarker"/$previousValueMarker}"
+			    quotedArg="${quotedArg//"$escapedNewValueMarker"/$newValueMarker}"
+			    quotedArg="${quotedArg//"$escapedPreviousLineMarker"/$previousLineMarker}"
+			    quotedArg="${quotedArg//"$escapedNewLineMarker"/$newLineMarker}"
+			    cmd="${cmd}${cmd:+ }${quotedArg}"
+			    shift
+			done
+			if [ $# -eq 0 ]; then
+			    echo "ERROR: --exec command must be concluded with '${ONFIELDCHANGE_EXEC_END}'"; echo; printUsage "$0"
+			    exit 2
+			fi >&2
+			shift
+			addCommand "$cmd"
+			;;
+	+([-0-9,]))	fieldSelectors+=("$1"); shift
+			fieldCommands+=("$currentCommand")
+			previousType=selector
+			;;
+	--)		shift; break;;
+	-*)		{ echo "ERROR: Unknown option \"$1\"!"; echo; printUsage "$0"; } >&2; exit 2;;
+	*)		break;;
+    esac
+done
+if [ ${#fieldSelectors[@]} -eq 0 ]; then
+    echo 'ERROR: No [-]N passed.'
+    echo
+    printUsage "$0"
+    exit 2
+fi >&2
+if [ "$isInPlace" ] && [ "$isRemove" ]; then
+    awkCall=(gawk -i inplace -v "INPLACE_SUFFIX=$inPlaceExtension" -v "inplace::suffix=$inPlaceExtension")
+fi
+
+IFS=$'\n'
+exec "${awkCall[@]}" "${awkArgs[@]}" \
+    -v "isInPlace=$isInPlace" \
+    -v "isIncludeFirst=$isIncludeFirst" \
+    -v "isIncludeLast=$isIncludeLast" \
+    -v "SENTINEL=${defaultValue//\\/\\\\}" \
+    -v "isRemove=$isRemove" \
+    -v "isBuffered=$isBuffered" \
+    -v "lineNumberMarker=${lineNumberMarker//\\/\\\\}" \
+    -v "previousValueMarker=${previousValueMarker//\\/\\\\}" \
+    -v "newValueMarker=${newValueMarker//\\/\\\\}" \
+    -v "previousLineMarker=${previousLineMarker//\\/\\\\}" \
+    -v "newLineMarker=${newLineMarker//\\/\\\\}" \
+    -v "fieldCommandList=${fieldCommands[*]//\\/\\\\}" \
+    -v "fieldSelectorList=${fieldSelectors[*]//\\/\\\\}" \
+'
+function literalGensub(r, s, h, t,      literalR, literalS)
+{
+    literalR = gensub(/[][\\$*+?{}.|()^]/, "\\\\&", "g", r)
+    literalS = gensub(/[\\&]/, "\\\\&", "g", s)
+    return gensub(literalR, literalS, h, t)
+}
+function getFieldNr(field)
+{
+    field = 0 + field
+    return (field < 0 \
+	? NF + field + 1 \
+	: field \
+    )
+}
+function execute(lineNr, previousValue, newValue, previousLine, newLine, command,       interpolatedCommand, exitStatus)
+{
+    interpolatedCommand = command
+    interpolatedCommand = literalGensub(lineNumberMarker, lineNr, "g", interpolatedCommand)
+    interpolatedCommand = literalGensub(previousValueMarker, previousValue, "g", interpolatedCommand)
+    interpolatedCommand = literalGensub(newValueMarker, newValue, "g", interpolatedCommand)
+    interpolatedCommand = literalGensub(previousLineMarker, previousLine, "g", interpolatedCommand)
+    interpolatedCommand = literalGensub(newLineMarker, newLine, "g", interpolatedCommand)
+
+    exitStatus = system(interpolatedCommand)
+    if (exitStatus != 0) {
+	exit(exitStatus)
+    }
+}
+BEGIN {
+    N = split(fieldCommandList, fieldCommands, "\n")
+    if (split(fieldSelectorList, fieldSelectors, "\n") != N) {
+	print "Assert: Mismatch in number of commands and fields." > "/dev/stderr"
+	exit 3
+    }
+    for (n = 1; n <= N; ++n) {
+	previousValue[n] = SENTINEL
+    }
+}
+NR == 1 {
+    # Use FS as output separator if it is not a regular expression.
+    firstTwoFields = $1 FS $2
+    if (NF < 2 || substr($0, 1, length(firstTwoFields)) == firstTwoFields) {
+	OFS = FS
+    } else if (FS == " " && (substr($0, 1, length(firstTwoFields)) == $1 "\t" $2)) {
+	OFS = "\t"
+    }
+}
+{
+    delete observedFields
+    for (n = 1; n <= N; ++n) {
+	fieldNr = getFieldNr(fieldSelectors[n])
+	if (fieldNr >= 1) {
+	    observedFields[fieldNr] = 1
+	    if (previousValue[n] != $fieldNr) {
+		if (NR > 1 || previousValue[n] != SENTINEL || isIncludeFirst) {	# Do not execute the command on the first value by default.
+		    execute(NR, previousValue[n], $fieldNr, previousLine, $0, fieldCommands[n])
+		}
+		previousValue[n] = $fieldNr
+	    }
+	}
+    }
+    previousLine = $0
+
+    if (isRemove) {
+	isFirst = 1
+	for (i = 1; i <= NF; i++) {
+	    if (! (i in observedFields)) {
+		printf "%s%s", (isFirst ? "" : OFS), $i
+		isFirst = 0
+	    }
+	}
+	printf "%s", ORS
+    } else if (isInPlace) {
+	next	# The in-place editing is not enabled when no fields are removed, as the command execution does not change file contents then, anyway. Just skip the print and flushing.
+    } else {
+	print
+    }
+    if (! isBuffered) fflush()
+}
+END {
+    if (isIncludeLast) {
+	for (n = 1; n <= N; ++n) {
+	    fieldNr = getFieldNr(fieldSelectors[n])
+	    if (fieldNr >= 1) {
+		if ($fieldNr != SENTINEL) {
+		    execute(NR, $fieldNr, SENTINEL, $0, "", fieldCommands[n])
+		}
+	    }
+	}
+    }
+}
+' "$@"

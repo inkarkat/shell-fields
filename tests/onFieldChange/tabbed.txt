@@ -1,0 +1,9 @@
+foo	1	low	X
+foo	0	low	X
+bar	0	low	X	#
+bar	0	low	X
+	1	low	X	#
+bar	1	low	X
+bar	0	high	X	@
+	0	high	X	@
+	1	high	X
