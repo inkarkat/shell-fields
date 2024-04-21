@@ -38,27 +38,23 @@ HELPDESCRIPTION
     echo
     printShortUsage "$1"
     echo
+    local markerUsage="
+			${lineNumberMarker}${lineNumberMarker:+ is replaced with the current line number.}
+			${previousValueMarker}${previousValueMarker:+ is replaced with the previous field value.}
+			${newValueMarker}${newValueMarker:+ is replaced with the new field value.}
+			${previousLineMarker}${previousLineMarker:+ is replaced with the previous line contents.}
+			${newLineMarker}${newLineMarker:+ is replaced with the new line contents.}"
     cat <<HELPTEXT
     --field-separator|-F FS
 			Use FS as the input field separator (as with AWK).
     --separator|-s SEP	Use SEP (instead of the original field separator)
 			between resulting fields.
     --unbuffered|-u	Immediately output each read line.
-    --command|-c CMD	Execute CMD as a command-line.
-			${lineNumberMarker}${lineNumberMarker:+ is replaced with the current line number.}
-			${previousValueMarker}${previousValueMarker:+ is replaced with the previous field value.}
-			${newValueMarker}${newValueMarker:+ is replaced with the new field value.}
-			${previousLineMarker}${previousLineMarker:+ is replaced with the previous line contents.}
-			${newLineMarker}${newLineMarker:+ is replaced with the new line contents.}
+    --command|-c CMD	Execute CMD as a command-line.${markerUsage}
     --exec COMMAND [...] $ONFIELDCHANGE_EXEC_END
 			Execute COMMAND; all following arguments are taken to be
 			arguments to the COMMAND until an argument consisting of
-			'${ONFIELDCHANGE_EXEC_END}' is encountered.
-			${lineNumberMarker}${lineNumberMarker:+ is replaced with the current line number.}
-			${previousValueMarker}${previousValueMarker:+ is replaced with the previous field value.}
-			${newValueMarker}${newValueMarker:+ is replaced with the new field value.}
-			${previousLineMarker}${previousLineMarker:+ is replaced with the previous line contents.}
-			${newLineMarker}${newLineMarker:+ is replaced with the new line contents.}
+			'${ONFIELDCHANGE_EXEC_END}' is encountered.${markerUsage}
 EXIT STATUS:
     0	Complete success.
     2	Bad invocation, wrong or missing command-line arguments.
