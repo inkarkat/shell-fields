@@ -1,7 +1,5 @@
 #!/usr/bin/env bats
 
-load markers
-
 @test "command references line number" {
     run onFieldChange -F $'\t' --exec echo 'Change in {}' \; 1 "${BATS_TEST_DIRNAME}/pasta.txt"
     [ $status -eq 0 ]
