@@ -133,15 +133,7 @@ elif [ ${#runWithPromptArgs[@]} -gt 0 -a "$with" = 'header' ]; then
 fi >&2
 
 if [ "$hasProgressNotification" ] && [ -n "$progressSink" ]; then
-    exec 4> >(progressNotification --to "$progressSink" ${FIELDSTOARGS_LINE_WHAT:+--prepend-count "$FIELDSTOARGS_LINE_WHAT"} 2>/dev/null)
-
-    reportProgress()
-    {
-	trap 'reportProgress() { :; }; trap PIPE' PIPE
-	printf '%s\n' "$*" >&4 2>/dev/null  # Silence "printf: write error: Broken pipe"
-    }
-else
-    reportProgress() { :; }
+    typeset -a progressNotificationCommand=(progressNotification --to "$progressSink" ${FIELDSTOARGS_LINE_WHAT:+--prepend-count "$FIELDSTOARGS_LINE_WHAT"})
 fi
 
 setStatus()
@@ -195,29 +187,46 @@ isHeader=
 case "$with" in
     runWith*)
 	[ ${#runWithPromptArgs[@]} -eq 0 ] && runWithPromptArgs=(--worst-status)
-	parseFields | while IFS=$'\n' read -r argCnt
-	do
-	    readArgs || continue
+	{
+	    printf ' exec 4> >('
+	    printf '%q ' "${progressNotificationCommand[@]}"
+	    printf '2>/dev/null); reportProgress() { trap "reportProgress() { :; }; trap PIPE" PIPE; printf %%s\\\\n "$*" >&4 2>/dev/null; }\n'
 
-	    if [ ! "$isFirst" ] && [ -n "$betweenCommand" ]; then
-		if [ "${betweenCommand:$((${#betweenCommand} - 1))}" = ';' ]; then
-		    printf '%s ' "$betweenCommand"  # Prepend the BETWEEN-COMMAND to the next execution (so there's no separate prompt) if it ends with a semicolon. Its exit status is then ignored.
-		else
-		    printf '%s\n' "$betweenCommand" # Use a separate prompt (and with it consider its exit status).
+	    parseFields | while IFS=$'\n' read -r argCnt
+	    do
+		readArgs || continue
+
+		if [ ! "$isFirst" ] && [ -n "$betweenCommand" ]; then
+		    if [ "${betweenCommand:$((${#betweenCommand} - 1))}" = ';' ]; then
+			printf '%s ' "$betweenCommand"  # Prepend the BETWEEN-COMMAND to the next execution (so there's no separate prompt) if it ends with a semicolon. Its exit status is then ignored.
+		    else
+			printf '%s\n' "$betweenCommand" # Use a separate prompt (and with it consider its exit status).
+		    fi
 		fi
-	    fi
 
-	    buildHeaderAndInterpolatedCommands
-	    [ -z "$header" ] || reportProgress "$header"
+		buildHeaderAndInterpolatedCommands
+		[ -z "$header" ] || printf ' reportProgress %q || :\n' "$header"
 
-	    printf '%s ' "$interpolatedCommands"
-	    printf '\n'
-	    isFirst=
-	done | ${with:?} "${runWithPromptArgs[@]}"
+		printf '%s ' "$interpolatedCommands"
+		printf '\n'
+		isFirst=
+	    done
+	} | ${with:?} "${runWithPromptArgs[@]}"
 	;;
     header)
 	isHeader=t;&
     '')
+	if [ "$hasProgressNotification" ] && [ -n "$progressSink" ]; then
+	    exec 4> >("${progressNotificationCommand[@]}" 2>/dev/null)
+	    reportProgress()
+	    {
+		trap 'reportProgress() { :; }; trap PIPE' PIPE
+		printf '%s\n' "$*" >&4 2>/dev/null  # Silence "printf: write error: Broken pipe"
+	    }
+	else
+	    reportProgress() { :; }
+	fi
+
 	status=0
 	: ${FIELDSTOARGS_HEADER_ID:="fieldsToArgs-$$-$RANDOM"}
 	exec 3<&0
