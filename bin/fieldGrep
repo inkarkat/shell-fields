@@ -2,6 +2,8 @@
 set -o pipefail
 shopt -qs extglob
 
+: ${FIELDGREP_INPUTFILES_END=;}
+
 printUsage()
 {
     cat <<HELPTEXT
@@ -9,14 +11,14 @@ Print lines where selected field(s) N (-N counted from behind), separated by FS,
 HELPTEXT
     echo
     printf 'Usage: cat FILE [...] | %q %s\n' "$(basename "$1")" '[-F|--field-separator FS] [-u|--unbuffered] [GREP-OPTIONS ...] -e|--regexp PATTERN|-f|--file FILE [...] [-]N [...]'
-    printf 'Usage: %q %s\n' "$(basename "$1")" '-I|--input FILESPEC [...] GREP-OPTIONS [...] [-]N [...] [-?|-h|--help]'
+    printf 'Usage: %q %s\n' "$(basename "$1")" "... -I|--input FILE [-i ...]|--input-files FILE [...] ${FIELDGREP_INPUTFILES_END} GREP-OPTIONS [...] [-]N [...] [-?|-h|--help]"
     echo
     cat <<HELPTEXT
 Print lines where any but the passed field(s) N (-N counted from behind), separated by FS, match a PATTERN.
 HELPTEXT
     echo
     printf 'Usage: cat FILE [...] | %q %s\n' "$(basename "$1")" '[-F|--field-separator FS] [-u|--unbuffered] -V|--invert-fields [GREP-OPTIONS ...] -e|--regexp PATTERN|-f|--file FILE [...] [-]N [...]'
-    printf 'Usage: %q %s\n' "$(basename "$1")" '-I|--input FILESPEC [...] -V|--invert-fields GREP-OPTIONS [...] [-]N [...] [-?|-h|--help]'
+    printf 'Usage: %q %s\n' "$(basename "$1")" "... -I|--input FILE [-i ...]|--input-files FILE [...] ${FIELDGREP_INPUTFILES_END}-V|--invert-fields GREP-OPTIONS [...] [-]N [...] [-?|-h|--help]"
 }
 
 addPattern()
@@ -64,7 +66,7 @@ typeset -a grepPatternArgs=()
 unset separatorGrepArgs
 typeset -a fsArgs=()
 fieldSeparator='[	 ]'
-typeset -a awkArgs=()
+typeset -a inputFilespecs=()
 isInvertFields=
 isOnlyMatching=
 isPerlRegexp=
@@ -94,7 +96,23 @@ do
 	--file|-f)		addPatternFile "$1" "$2"; shift; shift;;
 	--file=*)		addPatternFile --file "${1#--file=}"; shift;;
 
-	--input|-I)		shift; awkArgs+=("$1"); shift;;
+	--input|-I)	shift; inputFilespecs+=("${1:?}"); shift;;
+	--input-files)	shift
+			while [ $# -gt 0 -a "$1" != "$FIELDGREP_INPUTFILES_END" ]
+			do
+			    inputFilespecs+=("$1")
+			    shift
+			done
+			if [ $# -eq 0 ]; then
+			    echo "ERROR: --input-files must be concluded with '${FIELDGREP_INPUTFILES_END}'"; echo; printUsage "$0"
+			    exit 2
+			fi >&2
+			shift
+			if [ ${#inputFilespecs[@]} -eq 0 ]; then
+			    echo 'ERROR: --input-files must be followed by at least one FILE.'; echo; printUsage "$0"
+			    exit 2
+			fi >&2
+			;;
 	--invert-fields|-V)	shift; isInvertFields=t;;
 	--field-separator|-F)	shift; fsArgs=(-F "$1"); fieldSeparator="$1"; shift;;
 	--unbuffered|-u)	shift; isBuffered=''; grepBufferedArgs=(--line-buffered);;
@@ -184,7 +202,7 @@ NR == 1 {
     printf "0%s%s\n", OFS, OFS
     if (isUnBuffered) fflush()
 }
-' "${awkArgs[@]}" | \
+' "${inputFilespecs[@]}" | \
     grep "${grepRegexpDialectArgs[@]}" "${grepFixedStringsArgs[@]}" "${grepArgs[@]}" "${grepBufferedArgs[@]}" "${separatorGrepArgs[@]}" "${grepPatternArgs[@]}" | \
 awk "${fsArgs[@]}" \
     -v "isBuffered=$isBuffered" \

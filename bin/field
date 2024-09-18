@@ -1,18 +1,20 @@
 #!/bin/bash
 shopt -qs extglob
 
+: ${FIELD_INPUTFILES_END=;}
+
 printUsage()
 {
     cat <<HELPTEXT
 Print selected field(s) N (-N counted from behind) from stdin, separated by SEP (or the original FS).
 HELPTEXT
     printf 'Usage: cat FILE [...] | %q %s\n' "$(basename "$1")" '[-F|--field-separator FS] [-u|--unbuffered] [-]N|SEP [...]'
-    printf 'Usage: %q %s\n' "$(basename "$1")" '-i|--input FILESPEC [...] [-]N|SEP [...] [-?|-h|--help]'
+    printf 'Usage: %q %s\n' "$(basename "$1")" "... -i|--input FILE [-i ...]|--input-files FILE [...] ${FIELD_INPUTFILES_END} [-]N|SEP [...] [-?|-h|--help]"
     cat <<HELPTEXT
 Print everything but passed field(s) N (-N counted from behind) from stdin.
 HELPTEXT
     printf 'Usage: cat FILE [...] | %q %s\n' "$(basename "$1")" '[-F|--field-separator FS] [-u|--unbuffered] -v|--remove [-]N [...]'
-    printf 'Usage: %q %s\n' "$(basename "$1")" '-i|--input FILESPEC [...] -v|--remove [-]N [...] [-?|-h|--help]'
+    printf 'Usage: %q %s\n' "$(basename "$1")" "... -i|--input FILE [-i ...]|--input-files FILE [...] ${FIELD_INPUTFILES_END} -v|--remove [-]N [...] [-?|-h|--help]"
 }
 fieldNumberError()
 {
@@ -24,20 +26,38 @@ fieldNumberError()
 
 isBuffered=t
 typeset -a fsArgs=()
-typeset -a awkArgs=()
+typeset -a inputFilespecs=()
 isRemoveFields=
 while [ $# -ne 0 ]
 do
     case "$1" in
-	--help|-h|-\?)		shift; printUsage "$0"; exit 0;;
-	--input|-i)		shift; awkArgs+=("$1"); shift;;
-	--remove|-v)		shift; isRemoveFields=t;;
-	--field-separator|-F)	shift; fsArgs=(-F "$1"); shift;;
-	--unbuffered|-u)	shift; isBuffered=;;
-	--)			shift; break;;
-	-+([0-9]))		break;;
-	-*)			{ echo "ERROR: Unknown option \"$1\"!"; echo; printUsage "$0"; } >&2; exit 2;;
-	*)			break;;
+	--help|-h|-\?)	shift; printUsage "$0"; exit 0;;
+	--input|-i)	shift; inputFilespecs+=("${1:?}"); shift;;
+	--input-files)	shift
+			while [ $# -gt 0 -a "$1" != "$FIELD_INPUTFILES_END" ]
+			do
+			    inputFilespecs+=("$1")
+			    shift
+			done
+			if [ $# -eq 0 ]; then
+			    echo "ERROR: --input-files must be concluded with '${FIELD_INPUTFILES_END}'"; echo; printUsage "$0"
+			    exit 2
+			fi >&2
+			shift
+			if [ ${#inputFilespecs[@]} -eq 0 ]; then
+			    echo 'ERROR: --input-files must be followed by at least one FILE.'; echo; printUsage "$0"
+			    exit 2
+			fi >&2
+			;;
+	--remove|-v)	shift; isRemoveFields=t;;
+	--field-separator|-F)
+			shift; fsArgs=(-F "$1"); shift;;
+	--unbuffered|-u)
+			shift; isBuffered=;;
+	--)		shift; break;;
+	-+([0-9]))	break;;
+	-*)		{ echo "ERROR: Unknown option \"$1\"!"; echo; printUsage "$0"; } >&2; exit 2;;
+	*)		break;;
     esac
 done
 [ $# -gt 0 ] || fieldNumberError
@@ -85,7 +105,7 @@ BEGIN {
     printf "%s", ORS
     if (! isBuffered) fflush()
 }
-' "${awkArgs[@]}"
+' "${inputFilespecs[@]}"
 else
     hasFieldNumber=
     isSubsequent=
@@ -124,5 +144,5 @@ $outputSeparatorDetermination
 {
     print$selectors
     if (! isBuffered) fflush()
-}" "${awkArgs[@]}"
+}" "${inputFilespecs[@]}"
 fi
