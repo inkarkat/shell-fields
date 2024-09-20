@@ -47,7 +47,7 @@ HELPDESCRIPTION
     --progress SINK	Report the current line / selected field through one of
 			the SINKs of the progressNotification command.}
     --with-header	Print a header (containing the current line / selected
-			field) before each execution.
+			field) before each execution if COMMAND produces output.
     --separate-errors	Do not combine command output and command errors into
 			one (paged) stream. Commands that just cause error
 			output won't have a header then. Error output will
