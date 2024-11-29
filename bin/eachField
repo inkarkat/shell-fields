@@ -1,6 +1,6 @@
 #!/bin/bash
 set -o pipefail
-shopt -qs extglob
+shopt -qs extglob nullglob
 
 : ${EACHFIELD_EXEC_END=;}
 : ${EACHFIELD_FILE_MARKER='{}'}
@@ -131,10 +131,14 @@ fieldSeparator="$(awk "${awkArgs[@]}" \
     -v "tempDirspec=${tempDirspec//\\/\\\\}" \
     -v "fieldSelectorList=${fieldSelectors[*]//\\/\\\\}" \
 '
-function writeRowToSet(rowNum, rowContents,      setFilespec)
+function writeRowToSet(rowNum, isEmpty, rowContents,      setFilespec)
 {
     setFilespec = sprintf("%s/set-%0.8d", tempDirspec, rowNum)
-    print rowContents > setFilespec
+    if (isEmpty) {
+	printf "" > setFilespec
+    } else {
+	print rowContents > setFilespec
+    }
 }
 BEGIN {
     N = split(fieldSelectorList, fieldSelectors, "\n")
@@ -175,19 +179,31 @@ NR == 1 {
 	    if (NR > 1 && i > previousMaxNF) {
 		# Additional field(s): Start with empty previously encountered rows so that the fields remain aligned.
 		for (j = 1; j < NR; ++j) {
-		    writeRowToSet(i, "")
+		    writeRowToSet(i, 0, "")
 		}
 	    }
 	    row = $i
 	    hasRow = 1
 	}
 	if (hasRow) {
-	    writeRowToSet(i, row)
+	    writeRowToSet(i, 0, row)
 	}
     }
     previousMaxNF = maxNF
 }
 END {
+    if (maxNF == 0) {
+	highestExtractedFieldNr = 0
+	for (i = 1; i <= N; ++i) {
+	    for (f in fields[i]) {
+		highestExtractedFieldNr = (fields[i][f] < 0 || fields[i][f] < highestExtractedFieldNr ? highestExtractedFieldNr : fields[i][f])
+	    }
+	}
+	for (j = 1; j <= highestExtractedFieldNr; ++j) {
+	    writeRowToSet(j, 1)
+	}
+    }
+
     printf("%sX", OFS)
 }
 ' "$@")" || { echo >&2 'ERROR: Failed to separate fields.'; exit 3; }
@@ -236,6 +252,8 @@ processAllSets()
 recombineSetsAndOutput()
 {
     local separator="${1?}"; shift
+    typeset -a setFilespecs=("$tempDirspec"/set-*)
+    [ ${#setFilespecs[@]} -gt 0 ] || return 0
 
     if [ ${#separator} -gt 1 ]; then
 	: ${EACHFIELD_MULTIDELIMITER_PLACEHOLDER:=}
@@ -243,10 +261,10 @@ recombineSetsAndOutput()
 	local literalSeparator="$separator"
 	literalSeparator="${literalSeparator//\\/\\\\}"
 	literalSeparator="${literalSeparator//&/\\&}"
-	paste --delimiters "$EACHFIELD_MULTIDELIMITER_PLACEHOLDER" -- "$tempDirspec"/set-* \
+	paste --delimiters "$EACHFIELD_MULTIDELIMITER_PLACEHOLDER" -- "${setFilespecs[@]}" \
 	    | sed -e "s#${EACHFIELD_MULTIDELIMITER_PLACEHOLDER}#${literalSeparator//#/\\#}#g"
     else
-	paste --delimiters "$separator" -- "$tempDirspec"/set-*
+	paste --delimiters "$separator" -- "${setFilespecs[@]}"
     fi || return 3
 }
 
