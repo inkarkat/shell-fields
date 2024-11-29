@@ -158,13 +158,18 @@ NR == 1 {
 	maxNF = NF
     }
     for (i = 1; i <= (N > 0 ? N : maxNF); ++i) {
-	sep = ""
 	row = ""
+	sep = ""
+	hasRow = 0
+
 	if (N > 0) {
 	    for (f in fields[i]) {
 		field = (fields[i][f] < 0 ? NF + fields[i][f] + 1 : fields[i][f])
-		row = row sep $field
-		sep = OFS
+		if (field > 0) {
+		    row = row sep $field
+		    sep = OFS
+		    hasRow = 1
+		}
 	    }
 	} else {
 	    if (NR > 1 && i > previousMaxNF) {
@@ -174,8 +179,11 @@ NR == 1 {
 		}
 	    }
 	    row = $i
+	    hasRow = 1
 	}
-	writeRowToSet(i, row)
+	if (hasRow) {
+	    writeRowToSet(i, row)
+	}
     }
     previousMaxNF = maxNF
 }
@@ -213,7 +221,7 @@ processAllSets()
 	    [ -n "$setCommand" ] || continue
 	    printf -v setFilespec '%s/set-%0.8d' "$tempDirspec" "$((i + 1))"
 
-	    processSet "$setCommand" "$setFilespec" || status=$?
+	    [ ! -r "$setFilespec" ] || processSet "$setCommand" "$setFilespec" || status=$?
 	done
     else
 	for setFilespec in "$tempDirspec"/set-*

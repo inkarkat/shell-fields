@@ -28,3 +28,14 @@ fields	more
 gap	no
 six	end" ]
 }
+
+@test "address non-existing fields from behind" {
+    run eachField -111 -1 -10 -2 -33 "${BATS_TEST_DIRNAME}/jagged-tabbed.txt"
+    [ "$status" -eq 0 ]
+    [ "$output" = "one	foo
+more	two
+three	baz
+fields	more
+gap	no
+six	end" ]
+}
