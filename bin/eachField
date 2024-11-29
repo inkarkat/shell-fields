@@ -106,11 +106,11 @@ do
 			allOptions+=("$1"); shift
 			addCommand "$cmd"
 			;;
+	--)		shift; break;;
 	+([-0-9,]))	fieldSelectors+=("$1"); allOptions+=("$1"); shift
 			fieldCommands+=("$currentCommand")
 			previousType=selector
 			;;
-	--)		shift; break;;
 	-*)		{ echo "ERROR: Unknown option \"$1\"!"; echo; printUsage "$0"; } >&2; exit 2;;
 	*)		break;;
     esac
