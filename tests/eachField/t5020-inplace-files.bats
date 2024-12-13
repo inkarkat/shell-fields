@@ -9,6 +9,8 @@ setup()
 }
 
 @test "file marker command is applied to all files in-place" {
+    type -t eachFile >/dev/null || skip 'eachFile is not available'
+
     run eachField --in-place --exec sed -e y/abcdefghijklmnopqrstuvwxyz/ABCDEFGHIJKLMNOPQRSTUVWXYZ/ {} \; "$FILE1" "$FILE2"
     [ $status -eq 0 ]
     [ "$output" = "" ]
