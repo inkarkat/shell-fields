@@ -1,8 +1,9 @@
 #!/usr/bin/env bats
 
+load fixture
+
 @test "invalid AWK expression prints AWK error message" {
-    run addField -F $'\t' 2 '++++' "${BATS_TEST_DIRNAME}/tabbed.txt"
-    [ $status -eq 1 ]
-    [ "${lines[0]%%:*}" = "awk" ]
-    [ "${lines[1]##*^ }" = "syntax error" ]
+    run -1 addField -F $'\t' 2 '++++' "${BATS_TEST_DIRNAME}/tabbed.txt"
+    assert_line -n 0 -e '^awk:'
+    assert_line -n 1 -p "syntax error"
 }

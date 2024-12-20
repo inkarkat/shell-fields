@@ -1,25 +1,30 @@
 #!/usr/bin/env bats
 
+load fixture
+
 @test "print the first field" {
-    run field --input "${BATS_TEST_DIRNAME}/tabbed.txt" -F $'\t' 1
-    [ $status -eq 0 ]
-    [ "$output" = "foo
+    run -0 field --input "${BATS_TEST_DIRNAME}/tabbed.txt" -F $'\t' 1
+    assert_output - <<'EOF'
+foo
 bar
-baz" ]
+baz
+EOF
 }
 
 @test "print the last field" {
-    run field --input "${BATS_TEST_DIRNAME}/tabbed.txt" -F $'\t' -1
-    [ $status -eq 0 ]
-    [ "$output" = "A Here
+    run -0 field --input "${BATS_TEST_DIRNAME}/tabbed.txt" -F $'\t' -1
+    assert_output - <<'EOF'
+A Here
 B There
-C U" ]
+C U
+EOF
 }
 
 @test "print the second from last field" {
-    run field --input "${BATS_TEST_DIRNAME}/tabbed.txt" -F $'\t' -2
-    [ $status -eq 0 ]
-    [ "$output" = "100
+    run -0 field --input "${BATS_TEST_DIRNAME}/tabbed.txt" -F $'\t' -2
+    assert_output - <<'EOF'
+100
 201
-333" ]
+333
+EOF
 }

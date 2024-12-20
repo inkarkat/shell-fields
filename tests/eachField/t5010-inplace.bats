@@ -1,5 +1,7 @@
 #!/usr/bin/env bats
 
+load fixture
+
 setup()
 {
     export FILE="${BATS_TMPDIR}/input.txt"
@@ -7,23 +9,25 @@ setup()
 }
 
 @test "file marker command is applied to all fields to uppercase all fields in-place" {
-    run eachField --in-place --exec sed -e y/abcdefghijklmnopqrstuvwxyz/ABCDEFGHIJKLMNOPQRSTUVWXYZ/ {} \; "$FILE"
-    [ $status -eq 0 ]
-    [ "$output" = "" ]
-    [ "$(cat "$FILE")" = "FOO	ONE	HAHA
+    run -0 eachField --in-place --exec sed -e y/abcdefghijklmnopqrstuvwxyz/ABCDEFGHIJKLMNOPQRSTUVWXYZ/ {} \; "$FILE"
+    assert_output ''
+    diff -y - --label expected "$FILE" <<'EOF'
+FOO	ONE	HAHA
 BAR	TWO	HEHE
 BAZ	THREE	HIHI
-END	FOUR	HOHO" ]
+END	FOUR	HOHO
+EOF
 }
 
 @test "file marker command is applied to all fields to uppercase all fields in-place and writes a backup" {
-    run eachField --in-place=.bak --exec sed -e y/abcdefghijklmnopqrstuvwxyz/ABCDEFGHIJKLMNOPQRSTUVWXYZ/ {} \; "$FILE"
-    [ $status -eq 0 ]
-    [ "$output" = "" ]
-    [ "$(cat "$FILE")" = "FOO	ONE	HAHA
+    run -0 eachField --in-place=.bak --exec sed -e y/abcdefghijklmnopqrstuvwxyz/ABCDEFGHIJKLMNOPQRSTUVWXYZ/ {} \; "$FILE"
+    assert_output ''
+    diff -y - --label expected "$FILE" <<'EOF'
+FOO	ONE	HAHA
 BAR	TWO	HEHE
 BAZ	THREE	HIHI
-END	FOUR	HOHO" ]
-    [ -e "${FILE}.bak" ]
-    cmp -- "${BATS_TEST_DIRNAME}/rectangular-tabbed.txt" "${FILE}.bak"
+END	FOUR	HOHO
+EOF
+    assert_exists "${FILE}.bak"
+    diff -y "${BATS_TEST_DIRNAME}/rectangular-tabbed.txt" "${FILE}.bak"
 }

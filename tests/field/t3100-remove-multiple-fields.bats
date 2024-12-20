@@ -1,31 +1,35 @@
 #!/usr/bin/env bats
 
+load fixture
+
 @test "print everything but the first two fields" {
-    run field --input "${BATS_TEST_DIRNAME}/tabbed.txt" -F $'\t' --remove 1 2
-    [ $status -eq 0 ]
-    [ "$output" = "100	A Here
+    run -0 field --input "${BATS_TEST_DIRNAME}/tabbed.txt" -F $'\t' --remove 1 2
+    assert_output - <<'EOF'
+100	A Here
 201	B There
-333	C U" ]
+333	C U
+EOF
 }
 
 @test "print everything but the second and last fields" {
-    run field --input "${BATS_TEST_DIRNAME}/tabbed.txt" -F $'\t' --remove 2 -1
-    [ $status -eq 0 ]
-    [ "$output" = "foo	100
+    run -0 field --input "${BATS_TEST_DIRNAME}/tabbed.txt" -F $'\t' --remove 2 -1
+    assert_output - <<'EOF'
+foo	100
 bar	201
-baz	333" ]
+baz	333
+EOF
 }
 
 @test "remove everything but the second field prints just the second field" {
-    run field --input "${BATS_TEST_DIRNAME}/tabbed.txt" -F $'\t' --remove 1 3 4
-    [ $status -eq 0 ]
-    [ "$output" = "first
+    run -0 field --input "${BATS_TEST_DIRNAME}/tabbed.txt" -F $'\t' --remove 1 3 4
+    assert_output - <<'EOF'
+first
 second
-third" ]
+third
+EOF
 }
 
 @test "removing all fields prints nothing" {
-    run field --input "${BATS_TEST_DIRNAME}/tabbed.txt" -F $'\t' --remove 4 3 2 1
-    [ $status -eq 0 ]
-    [ "$output" = "" ]
+    run -0 field --input "${BATS_TEST_DIRNAME}/tabbed.txt" -F $'\t' --remove 4 3 2 1
+    assert_output ''
 }

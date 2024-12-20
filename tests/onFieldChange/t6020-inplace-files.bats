@@ -1,5 +1,7 @@
 #!/usr/bin/env bats
 
+load fixture
+
 setup()
 {
     export FILE1="${BATS_TMPDIR}/input1.txt"
@@ -9,23 +11,27 @@ setup()
 }
 
 @test "second field is removed in all files in-place" {
-    run onFieldChange --in-place -F $'\t' --remove-fields --command 'echo >&2 Change in {}' 2 "$FILE1" "$FILE2"
-    [ $status -eq 0 ]
-    [ "$output" = "Change in 2
+    run -0 onFieldChange --in-place -F $'\t' --remove-fields --command 'echo >&2 Change in {}' 2 "$FILE1" "$FILE2"
+    assert_output - <<'EOF'
+Change in 2
 Change in 3
 Change in 6
 Change in 7
 Change in 8
 Change in 11
 Change in 13
-Change in 15" ]
-    [ "$(cat "$FILE1")" = "ramen
+Change in 15
+EOF
+    diff -y - --label expected "$FILE1" <<'EOF'
+ramen
 ramen
 ramen
 penne
 ravioli
-ravioli" ]
-    [ "$(cat "$FILE2")" = "foo	low	X
+ravioli
+EOF
+    diff -y - --label expected "$FILE2" <<'EOF'
+foo	low	X
 foo	low	X
 bar	low	X	#
 bar	low	X
@@ -33,5 +39,6 @@ bar	low	X
 bar	low	X
 bar	high	X	@
 	high	X	@
-	high	X" ]
+	high	X
+EOF
 }
