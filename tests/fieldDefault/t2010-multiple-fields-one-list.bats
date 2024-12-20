@@ -86,7 +86,7 @@ eof	DEFAULT" ]
 }
 
 @test "default first empty from third field on" {
-    run fieldDefault --input <(cat <<'EOF'
+    run fieldDefault -F $'\t' --value DEFAULT 3- <<'EOF'
 one	two	three	four	five	six	seven
 one		three	four	five		seven
 one	two	three	four			seven
@@ -94,7 +94,6 @@ one	two	three		five		seven
 one				five	six	seven
 one	two	three				seven
 EOF
-) -F $'\t' --value DEFAULT 3-
 
     [ $status -eq 0 ]
     [ "$output" = "one	two	three	four	five	six	seven
@@ -106,7 +105,7 @@ one	two	three	DEFAULT			seven" ]
 }
 
 @test "default first empty from fifth field from behind on" {
-    run fieldDefault --input <(cat <<'EOF'
+    run fieldDefault -F $'\t' --value DEFAULT -5- <<'EOF'
 one	two	three	four	five	six	seven
 one		three	four	five		seven
 one	two	three	four			seven
@@ -114,7 +113,6 @@ one	two	three		five		seven
 one				five	six	seven
 one	two	three				seven
 EOF
-) -F $'\t' --value DEFAULT -5-
 
     [ $status -eq 0 ]
     [ "$output" = "one	two	three	four	five	six	seven

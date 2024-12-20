@@ -1,7 +1,7 @@
 #!/usr/bin/env bats
 
 @test "last field will refer to the highest field number already seen" {
-    run fieldDefault --input <(cat <<'EOF'
+    run fieldDefault -F $'\t' --value DEFAULT -1 <<'EOF'
 one	two
 fill
 one	two	three
@@ -11,7 +11,6 @@ fill
 fewer	here
 fill
 EOF
-) -F $'\t' --value DEFAULT -1
 
     [ $status -eq 0 ]
     [ "$output" = "one	two
@@ -25,7 +24,7 @@ fill				DEFAULT" ]
 }
 
 @test "default first of last three fields" {
-    run fieldDefault --input <(cat <<'EOF'
+    run fieldDefault -F $'\t' --value DEFAULT -3--1 <<'EOF'
 one	two
 fill
 one	two	three
@@ -35,7 +34,6 @@ fill
 one	two	three	four	five	six	seven
 fill
 EOF
-) -F $'\t' --value DEFAULT -3--1
 
     [ $status -eq 0 ]
     [ "$output" = "one	two
@@ -49,7 +47,7 @@ fill				DEFAULT" ]
 }
 
 @test "default all last three fields" {
-    run fieldDefault --input <(cat <<'EOF'
+    run fieldDefault -F $'\t' --value DEFAULT -3 -2 -1 <<'EOF'
 one	two
 fill
 one	two	three
@@ -59,7 +57,6 @@ fill
 one	two	three	four	five	six	seven
 fill
 EOF
-) -F $'\t' --value DEFAULT -3 -2 -1
 
     [ $status -eq 0 ]
     [ "$output" = "one	two
@@ -73,7 +70,7 @@ fill				DEFAULT	DEFAULT	DEFAULT" ]
 }
 
 @test "default third and second-to-last field" {
-    run fieldDefault --input <(cat <<'EOF'
+    run fieldDefault -F $'\t' --value FIX 3 --value LAST -2 <<'EOF'
 one	two
 fill
 one	two	three
@@ -83,7 +80,6 @@ fill
 one	two	three	four	five	six	seven
 fill
 EOF
-) -F $'\t' --value FIX 3 --value LAST -2
 
     [ $status -eq 0 ]
     [ "$output" = "one	two
