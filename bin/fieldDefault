@@ -42,7 +42,7 @@ HELPDESCRIPTION
     --in-place[=SUFFIX]|-i[SUFFIX]
 			Edit FILESPEC(s) in place (makes backup if SUFFIX
 			supplied).
-    --input|-I FILE 	Read from FILE(s) instead of standard input.
+    --input|-I FILE	Read from FILE(s) instead of standard input.
     --input-files FILE [...] ${FIELDDEFAULT_INPUTFILES_END}
 			Read from the following FILE(s) i.e. all following
 			arguments until an argument consisting of '${FIELDDEFAULT_INPUTFILES_END}'
