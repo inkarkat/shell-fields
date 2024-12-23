@@ -1,5 +1,7 @@
 #!/usr/bin/env bats
 
+load fixture
+
 setup()
 {
     export FILE="${BATS_TMPDIR}/input.txt"
@@ -8,34 +10,39 @@ setup()
 }
 
 @test "trigger is applied in-place" {
-    run onFieldChange --in-place -F $'\t' --command 'echo >&2 Change in {}' 1 "$FILE"
-    [ $status -eq 0 ]
-    [ "$output" = "Change in 4
-Change in 5" ]
-    cmp -- "${BATS_TEST_DIRNAME}/pasta.txt" "$FILE"
+    run -0 onFieldChange --in-place -F $'\t' --command 'echo >&2 Change in {}' 1 "$FILE"
+    assert_output - <<'EOF'
+Change in 4
+Change in 5
+EOF
+    diff -y "${BATS_TEST_DIRNAME}/pasta.txt" "$FILE"
 }
 
 @test "trigger is applied in-place and does not write a backup because no --remove-fields" {
-    run onFieldChange --in-place=.bak -F $'\t' --command 'echo >&2 Change in {}' 1 "$FILE"
-    [ $status -eq 0 ]
-    [ "$output" = "Change in 4
-Change in 5" ]
-    cmp -- "${BATS_TEST_DIRNAME}/pasta.txt" "$FILE"
+    run -0 onFieldChange --in-place=.bak -F $'\t' --command 'echo >&2 Change in {}' 1 "$FILE"
+    assert_output - <<'EOF'
+Change in 4
+Change in 5
+EOF
+    diff -y "${BATS_TEST_DIRNAME}/pasta.txt" "$FILE"
     [ ! -e "${FILE}.bak" ]
 }
 
 @test "second field is removed in-place and writes a backup" {
-    run onFieldChange --in-place=.bak -F $'\t' --remove-fields --command 'echo >&2 Change in {}' 2 "$FILE"
-    [ $status -eq 0 ]
-    [ "$output" = "Change in 2
+    run -0 onFieldChange --in-place=.bak -F $'\t' --remove-fields --command 'echo >&2 Change in {}' 2 "$FILE"
+    assert_output - <<'EOF'
+Change in 2
 Change in 3
-Change in 6" ]
-    [ "$(cat "$FILE")" = "ramen
+Change in 6
+EOF
+    diff -y - --label expected "$FILE" <<'EOF'
+ramen
 ramen
 ramen
 penne
 ravioli
-ravioli" ]
-    [ -e "${FILE}.bak" ]
-    cmp -- "${BATS_TEST_DIRNAME}/pasta.txt" "${FILE}.bak"
+ravioli
+EOF
+    assert_exists "${FILE}.bak"
+    diff -y "${BATS_TEST_DIRNAME}/pasta.txt" "${FILE}.bak"
 }

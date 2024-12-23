@@ -1,32 +1,26 @@
 #!/usr/bin/env bats
 
-emptyStdinEachField()
-{
-    printf ''| eachField "$@"
-}
+load fixture
 
 @test "empty input stays empty" {
-    run emptyStdinEachField \
+    run -0 eachField \
 	--exec sed -e 's/.*/[&]/' - {} \; \
-	1
-    [ $status -eq 0 ]
-    [ "$output" = '' ]
+	1 < /dev/null
+    assert_output ''
 }
 
 @test "empty input file stays empty" {
-    run eachField \
+    run -0 eachField \
 	--exec sed -e 's/.*/[&]/' \; \
 	1 -- /dev/null
-    [ $status -eq 0 ]
-    [ "$output" = '' ]
+    assert_output ''
 }
 
 @test "empty input does not contain any contents" {
-    run eachField \
+    run -0 eachField \
 	--exec wc -c \; \
 	1 -- /dev/null
-    [ $status -eq 0 ]
-    [ "$output" = '0' ]
+    assert_output '0'
 }
 
 @test "empty input still invokes command for each selected field" {
@@ -34,11 +28,10 @@ emptyStdinEachField()
     export MARKER="${BATS_TMPDIR}/marker"
     rm -f -- "$MARKER"
 
-    run eachField \
+    run -0 eachField \
 	--command "printf x >> ${MARKER@Q}" \
 	1 3 -9 4 -6 -- /dev/null
-    [ $status -eq 0 ]
-    [ "$output" = '' ]
+    assert_output ''
     local markerContents="$(< "$MARKER")"
     [ "$markerContents" = "xxxx" ]
 }

@@ -1,15 +1,11 @@
 #!/usr/bin/env bats
 
-stdinFieldDefault()
-{
-    cat -- "${BATS_TEST_DIRNAME}/tabbed.txt" | fieldDefault "$@"
-}
+load fixture
 
 @test "grep the first field with fixed text from stdin yields one line" {
-    run stdinFieldDefault -F $'\t' --value DEFAULT 1
-
-    [ $status -eq 0 ]
-    [ "$output" = "foo	first	100	A Here
+    run -0 fieldDefault -F $'\t' --value DEFAULT 1 < "${BATS_TEST_DIRNAME}/tabbed.txt"
+    assert_output - <<'EOF'
+foo	first	100	A Here
 bar	no4	201
 baz	empty4	301	
 boo	no34
@@ -19,5 +15,6 @@ DEFAULT	empty13		also
 DEFAULT			
 bzz			last
 DEFAULT
-eof" ]
+eof
+EOF
 }

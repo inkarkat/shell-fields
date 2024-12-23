@@ -210,6 +210,10 @@ function getFieldNr(field, originalNF,      isFromBehind)
     )
 }
 BEGIN {
+    # Ignore write errors on closed pipes; we explicitly handle them via
+    # --coprocess-error.
+    PROCINFO["NONFATAL"] = 1
+
     # Return dict sorted by fieldNumbers, from right to left.
     PROCINFO["sorted_in"] = "@ind_num_desc"
 

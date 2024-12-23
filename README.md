@@ -2,9 +2,12 @@
 
 _A collection of tools that work with fields and records in text files, like specialized AWK scripts._
 
+![Build Status](https://github.com/inkarkat/shell-fields/actions/workflows/build.yml/badge.svg)
+
 ### Dependencies
 
 * Bash, GNU `awk`, GNU `sed`
+* [inkarkat/memoizers](https://github.com/inkarkat/memoizers) for the `fieldNormalizeDate` command
 * [inkarkat/shell-filters](https://github.com/inkarkat/shell-filters) for literal matching in `fieldGrep`
 * [inkarkat/shell-tools](https://github.com/inkarkat/shell-tools) for in-place processing of multiple FILEs by the `eachField` command
 * automated testing is done with _bats - Bash Automated Testing System_ (https://github.com/bats-core/bats-core)

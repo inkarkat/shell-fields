@@ -1,10 +1,11 @@
 #!/usr/bin/env bats
 
-@test "defaulting multiple LISTs of first and second fields" {
-    run fieldDefault --input "${BATS_TEST_DIRNAME}/tabbed.txt" -F $'\t' --value DEFAULT 1 2
+load fixture
 
-    [ $status -eq 0 ]
-    [ "$output" = "foo	first	100	A Here
+@test "defaulting multiple LISTs of first and second fields" {
+    run -0 fieldDefault --input "${BATS_TEST_DIRNAME}/tabbed.txt" -F $'\t' --value DEFAULT 1 2
+    assert_output - <<'EOF'
+foo	first	100	A Here
 bar	no4	201
 baz	empty4	301	
 boo	no34
@@ -14,14 +15,14 @@ DEFAULT	empty13		also
 DEFAULT	DEFAULT		
 bzz	DEFAULT		last
 DEFAULT	DEFAULT
-eof	DEFAULT" ]
+eof	DEFAULT
+EOF
 }
 
 @test "defaulting multiple LISTs of first and second fields with different values" {
-    run fieldDefault --input "${BATS_TEST_DIRNAME}/tabbed.txt" -F $'\t' --value ONE 1 --value TWO 2
-
-    [ $status -eq 0 ]
-    [ "$output" = "foo	first	100	A Here
+    run -0 fieldDefault --input "${BATS_TEST_DIRNAME}/tabbed.txt" -F $'\t' --value ONE 1 --value TWO 2
+    assert_output - <<'EOF'
+foo	first	100	A Here
 bar	no4	201
 baz	empty4	301	
 boo	no34
@@ -31,14 +32,14 @@ ONE	empty13		also
 ONE	TWO		
 bzz	TWO		last
 ONE	TWO
-eof	TWO" ]
+eof	TWO
+EOF
 }
 
 @test "defaulting multiple LISTs of disjunct fields with different values is only defaulting the first field of a LIST" {
-    run fieldDefault --input "${BATS_TEST_DIRNAME}/tabbed.txt" -F $'\t' --value A 1,3 --value B 2,4
-
-    [ $status -eq 0 ]
-    [ "$output" = "foo	first	100	A Here
+    run -0 fieldDefault --input "${BATS_TEST_DIRNAME}/tabbed.txt" -F $'\t' --value A 1,3 --value B 2,4
+    assert_output - <<'EOF'
+foo	first	100	A Here
 bar	no4	201	B
 baz	empty4	301	B
 boo	no34	A	B
@@ -48,14 +49,14 @@ A	empty13		also
 A	B		
 bzz	B	A	last
 A	B
-eof	B	A" ]
+eof	B	A
+EOF
 }
 
 @test "defaulting multiple single-element LISTs of disjunct fields can be used to default all fields" {
-    run fieldDefault --input "${BATS_TEST_DIRNAME}/tabbed.txt" -F $'\t' --value A 1 3 --value B 2 4
-
-    [ $status -eq 0 ]
-    [ "$output" = "foo	first	100	A Here
+    run -0 fieldDefault --input "${BATS_TEST_DIRNAME}/tabbed.txt" -F $'\t' --value A 1 3 --value B 2 4
+    assert_output - <<'EOF'
+foo	first	100	A Here
 bar	no4	201	B
 baz	empty4	301	B
 boo	no34	A	B
@@ -65,14 +66,14 @@ A	empty13	A	also
 A	B	A	B
 bzz	B	A	last
 A	B	A	B
-eof	B	A	B" ]
+eof	B	A	B
+EOF
 }
 
 @test "defaulting multiple LISTs of overlapping fields with different values gives precedence to previous values" {
-    run fieldDefault --input "${BATS_TEST_DIRNAME}/tabbed.txt" -F $'\t' --value A 1-3 --value B 2,4
-
-    [ $status -eq 0 ]
-    [ "$output" = "foo	first	100	A Here
+    run -0 fieldDefault --input "${BATS_TEST_DIRNAME}/tabbed.txt" -F $'\t' --value A 1-3 --value B 2,4
+    assert_output - <<'EOF'
+foo	first	100	A Here
 bar	no4	201	B
 baz	empty4	301	B
 boo	no34	A	B
@@ -82,5 +83,6 @@ A	empty13		also
 A	B		
 bzz	A		last
 A	B
-eof	A		B" ]
+eof	A		B
+EOF
 }

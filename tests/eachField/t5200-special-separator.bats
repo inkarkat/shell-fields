@@ -1,37 +1,31 @@
 #!/usr/bin/env bats
 
-@test "parenthesizing with dash separators" {
-    run dashEachField --exec sed -e 's/.*/(&)/' \;
+load fixture
 
-    [ $status -eq 0 ]
-    [ "$output" = "(the)-(fox)-(jumps)-(over)-(the)-(lazy)-(dog)
-(my)-()-(is)-(over)-(the)-()-(sea)
-(our)-(hound)-(can)-(jump)-(the)-(many)-(hoops)" ]
-}
-dashEachField()
-{
-    (cat <<'EOF'
+@test "parenthesizing with dash separators" {
+    run -0 eachField --field-separator - --exec sed -e 's/.*/(&)/' \; <<'EOF'
 the-fox-jumps-over-the-lazy-dog
 my--is-over-the--sea
 our-hound-can-jump-the-many-hoops
 EOF
-    ) | eachField --field-separator - "$@"
+
+    assert_output - <<'EOF'
+(the)-(fox)-(jumps)-(over)-(the)-(lazy)-(dog)
+(my)-()-(is)-(over)-(the)-()-(sea)
+(our)-(hound)-(can)-(jump)-(the)-(many)-(hoops)
+EOF
 }
 
 @test "parenthesizing with double space separators" {
-    run doubleSpaceEachField --exec sed -e 's/.*/(&)/' \;
-
-    [ $status -eq 0 ]
-    [ "$output" = "(the fox)  (jumps over)  (the lazy dog)
-()  (is over)  ()
-(our hound)  (can jump)  (the many hoops)" ]
-}
-doubleSpaceEachField()
-{
-    (cat <<'EOF'
+    run -0 eachField --field-separator '  ' --exec sed -e 's/.*/(&)/' \; <<'EOF'
 the fox  jumps over  the lazy dog
   is over  
 our hound  can jump  the many hoops
 EOF
-    ) | eachField --field-separator '  ' "$@"
+
+    assert_output - <<'EOF'
+(the fox)  (jumps over)  (the lazy dog)
+()  (is over)  ()
+(our hound)  (can jump)  (the many hoops)
+EOF
 }

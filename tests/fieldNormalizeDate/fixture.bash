@@ -1,23 +1,7 @@
 #!/bin/bash
 
-runStdout() {
-  local origFlags="$-"
-  set +eET
-  local origIFS="$IFS"
-  output="$("$@" 2>/dev/null)"
-  status="$?"
-  IFS=$'\n' lines=($output)
-  IFS="$origIFS"
-  set "-$origFlags"
-}
+bats_require_minimum_version 1.5.0
+bats_load_library bats-support
+bats_load_library bats-assert
 
-runStderr() {
-  local origFlags="$-"
-  set +eET
-  local origIFS="$IFS"
-  output="$("$@" 2>&1 >/dev/null)"
-  status="$?"
-  IFS=$'\n' lines=($output)
-  IFS="$origIFS"
-  set "-$origFlags"
-}
+export TZ='Europe/Berlin'

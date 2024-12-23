@@ -1,30 +1,31 @@
 #!/usr/bin/env bats
 
-@test "parenthesizing to dash separator" {
-    run eachField --separator - --exec sed -e 's/.*/(&)/' \; "${BATS_TEST_DIRNAME}/rectangular-tabbed.txt"
+load fixture
 
-    [ $status -eq 0 ]
-    [ "$output" = "(foo)-(one)-(haha)
+@test "parenthesizing to dash separator" {
+    run -0 eachField --separator - --exec sed -e 's/.*/(&)/' \; "${BATS_TEST_DIRNAME}/rectangular-tabbed.txt"
+    assert_output - <<'EOF'
+(foo)-(one)-(haha)
 (bar)-(two)-(hehe)
 (baz)-(three)-(hihi)
-(end)-(four)-(hoho)" ]
+(end)-(four)-(hoho)
+EOF
 }
 
 @test "parenthesizing to space-dash-space separator" {
-    run eachField --separator ' - ' --exec sed -e 's/.*/(&)/' \; "${BATS_TEST_DIRNAME}/rectangular-tabbed.txt"
-
-    [ $status -eq 0 ]
-    [ "$output" = "(foo) - (one) - (haha)
+    run -0 eachField --separator ' - ' --exec sed -e 's/.*/(&)/' \; "${BATS_TEST_DIRNAME}/rectangular-tabbed.txt"
+    assert_output - <<'EOF'
+(foo) - (one) - (haha)
 (bar) - (two) - (hehe)
 (baz) - (three) - (hihi)
-(end) - (four) - (hoho)" ]
+(end) - (four) - (hoho)
+EOF
 }
 
 @test "parenthesizing to newline separator" {
-    run eachField --separator $'\n' --exec sed -e 's/.*/(&)/' \; "${BATS_TEST_DIRNAME}/rectangular-tabbed.txt"
-
-    [ $status -eq 0 ]
-    [ "$output" = "(foo)
+    run -0 eachField --separator $'\n' --exec sed -e 's/.*/(&)/' \; "${BATS_TEST_DIRNAME}/rectangular-tabbed.txt"
+    assert_output - <<'EOF'
+(foo)
 (one)
 (haha)
 (bar)
@@ -35,5 +36,6 @@
 (hihi)
 (end)
 (four)
-(hoho)" ]
+(hoho)
+EOF
 }

@@ -1,63 +1,73 @@
 #!/usr/bin/env bats
 
+load fixture
+
 @test "command is applied to all fields to uppercase all fields" {
-    run eachField --exec sed -e y/abcdefghijklmnopqrstuvwxyz/ABCDEFGHIJKLMNOPQRSTUVWXYZ/ \; "${BATS_TEST_DIRNAME}/rectangular-tabbed.txt"
-    [ $status -eq 0 ]
-    [ "$output" = "FOO	ONE	HAHA
+    run -0 eachField --exec sed -e y/abcdefghijklmnopqrstuvwxyz/ABCDEFGHIJKLMNOPQRSTUVWXYZ/ \; "${BATS_TEST_DIRNAME}/rectangular-tabbed.txt"
+    assert_output - <<'EOF'
+FOO	ONE	HAHA
 BAR	TWO	HEHE
 BAZ	THREE	HIHI
-END	FOUR	HOHO" ]
+END	FOUR	HOHO
+EOF
 }
 
 @test "pick second field and uppercase it" {
-    run eachField --exec sed -e y/abcdefghijklmnopqrstuvwxyz/ABCDEFGHIJKLMNOPQRSTUVWXYZ/ \; 2 "${BATS_TEST_DIRNAME}/rectangular-tabbed.txt"
-    [ $status -eq 0 ]
-    [ "$output" = "ONE
+    run -0 eachField --exec sed -e y/abcdefghijklmnopqrstuvwxyz/ABCDEFGHIJKLMNOPQRSTUVWXYZ/ \; 2 "${BATS_TEST_DIRNAME}/rectangular-tabbed.txt"
+    assert_output - <<'EOF'
+ONE
 TWO
 THREE
-FOUR" ]
+FOUR
+EOF
 }
 
 @test "pick second field and uppercase it, pass the others" {
-    run eachField 1 --exec sed -e y/abcdefghijklmnopqrstuvwxyz/ABCDEFGHIJKLMNOPQRSTUVWXYZ/ \; 2 --pass 3 "${BATS_TEST_DIRNAME}/rectangular-tabbed.txt"
-    [ $status -eq 0 ]
-    [ "$output" = "foo	ONE	haha
+    run -0 eachField 1 --exec sed -e y/abcdefghijklmnopqrstuvwxyz/ABCDEFGHIJKLMNOPQRSTUVWXYZ/ \; 2 --pass 3 "${BATS_TEST_DIRNAME}/rectangular-tabbed.txt"
+    assert_output - <<'EOF'
+foo	ONE	haha
 bar	TWO	hehe
 baz	THREE	hihi
-end	FOUR	hoho" ]
+end	FOUR	hoho
+EOF
 }
 
 @test "deletion of words with a is applied to all fields" {
-    run eachField --exec grep -v a \; "${BATS_TEST_DIRNAME}/rectangular-tabbed.txt"
-    [ $status -eq 0 ]
-    [ "$output" = "foo	one	hehe
+    run -0 eachField --exec grep -v a \; "${BATS_TEST_DIRNAME}/rectangular-tabbed.txt"
+    assert_output - <<'EOF'
+foo	one	hehe
 end	two	hihi
 	three	hoho
-	four	" ]
+	four	
+EOF
 }
 
 @test "apply different commands to fields" {
-    run eachField \
+    run -0 eachField \
 	--exec sed -e y/abcdefghijklmnopqrstuvwxyz/ABCDEFGHIJKLMNOPQRSTUVWXYZ/ \; 1 \
 	--exec sed -e 's/.*/[&]/' \; 2 \
 	--exec sed -e 's/$/!/' \; 3 \
 	"${BATS_TEST_DIRNAME}/rectangular-tabbed.txt"
-    [ $status -eq 0 ]
-    [ "$output" = "FOO	[one]	haha!
+
+    assert_output - <<'EOF'
+FOO	[one]	haha!
 BAR	[two]	hehe!
 BAZ	[three]	hihi!
-END	[four]	hoho!" ]
+END	[four]	hoho!
+EOF
 }
 
 @test "apply different commands to multiple fields separately and multiple times" {
-    run eachField \
+    run -0 eachField \
 	--exec sed -e y/abcdefghijklmnopqrstuvwxyz/ABCDEFGHIJKLMNOPQRSTUVWXYZ/ \; 1 3 \
 	--exec sed -e 's/.*/[&]/' \; 2 \
 	--exec sed -e 's/$/!/' \; 1 2 \
 	"${BATS_TEST_DIRNAME}/rectangular-tabbed.txt"
-    [ $status -eq 0 ]
-    [ "$output" = "FOO	HAHA	[one]	foo!	one!
+
+    assert_output - <<'EOF'
+FOO	HAHA	[one]	foo!	one!
 BAR	HEHE	[two]	bar!	two!
 BAZ	HIHI	[three]	baz!	three!
-END	HOHO	[four]	end!	four!" ]
+END	HOHO	[four]	end!	four!
+EOF
 }

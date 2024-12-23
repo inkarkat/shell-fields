@@ -1,15 +1,17 @@
 #!/usr/bin/env bats
 
+load fixture
+
 @test "triggers on multiple fields are executed in order of arguments" {
-    run onFieldChange -F $'\t' \
+    run -0 onFieldChange -F $'\t' \
 	    --exec echo 'Level change in {} to {+}' \; 3 \
 	    --exec echo 'Marker change in {} to {+}' \; 4 \
 	    --exec echo 'Number change in {} to {+}' \; 2\
 	    --exec echo 'Sigil change in {} to {+}' \; 5 \
 	    --exec echo 'Value change in {} to {+}' \; 1 \
 	    "${BATS_TEST_DIRNAME}/tabbed.txt"
-    [ $status -eq 0 ]
-    [ "$output" = "foo	1	low	X
+    assert_output - <<'EOF'
+foo	1	low	X
 Number change in 2 to 0
 foo	0	low	X
 Sigil change in 3 to #
@@ -32,5 +34,6 @@ Value change in 8 to
 	0	high	X	@
 Number change in 9 to 1
 Sigil change in 9 to 
-	1	high	X" ]
+	1	high	X
+EOF
 }

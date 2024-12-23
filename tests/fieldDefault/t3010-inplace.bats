@@ -1,5 +1,7 @@
 #!/usr/bin/env bats
 
+load fixture
+
 setup()
 {
     export FILE="${BATS_TMPDIR}/input.txt"
@@ -7,11 +9,10 @@ setup()
 }
 
 @test "grep the first field with fixed text in-place modifies the input file" {
-    run fieldDefault --input "$FILE" --in-place -F $'\t' --value DEFAULT 1
-
-    [ $status -eq 0 ]
-    [ "$output" = "" ]
-    [ "$(cat "$FILE")" = "foo	first	100	A Here
+    run -0 fieldDefault --input "$FILE" --in-place -F $'\t' --value DEFAULT 1
+    assert_output ''
+    diff -y - --label expected "$FILE" <<'EOF'
+foo	first	100	A Here
 bar	no4	201
 baz	empty4	301	
 boo	no34
@@ -21,16 +22,16 @@ DEFAULT	empty13		also
 DEFAULT			
 bzz			last
 DEFAULT
-eof" ]
+eof
+EOF
 }
 
 @test "grep the first field with fixed text in-place modifies the input file and writes a backup" {
     rm -f -- "${FILE}.bak"
-    run fieldDefault --input "$FILE" --in-place=.bak -F $'\t' --value DEFAULT 1
-
-    [ $status -eq 0 ]
-    [ "$output" = "" ]
-    [ "$(cat "$FILE")" = "foo	first	100	A Here
+    run -0 fieldDefault --input "$FILE" --in-place=.bak -F $'\t' --value DEFAULT 1
+    assert_output ''
+    diff -y - --label expected "$FILE" <<'EOF'
+foo	first	100	A Here
 bar	no4	201
 baz	empty4	301	
 boo	no34
@@ -40,8 +41,9 @@ DEFAULT	empty13		also
 DEFAULT			
 bzz			last
 DEFAULT
-eof" ]
-    
-    [ -e "${FILE}.bak" ]
-    cmp -- "${BATS_TEST_DIRNAME}/tabbed.txt" "${FILE}.bak"
+eof
+EOF
+
+    assert_exists "${FILE}.bak"
+    diff -y "${BATS_TEST_DIRNAME}/tabbed.txt" "${FILE}.bak"
 }

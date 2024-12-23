@@ -1,23 +1,22 @@
 #!/usr/bin/env bats
 
-stdinEachField()
-{
-    cat -- "${BATS_TEST_DIRNAME}/rectangular-tabbed.txt" | eachField "$@"
-}
+load fixture
 
 @test "apply mixed file marker command and commandlines" {
-    run stdinEachField \
+    run -0 eachField \
 	--command 'sed -e y/abcdefghijklmnopqrstuvwxyz/ABCDEFGHIJKLMNOPQRSTUVWXYZ/ {}' \
 	--exec sed -e 's/.*/[&]/' - {} \; \
 	--command "sed -e 's/\$/!/'" \
-	1
-    [ $status -eq 0 ]
-    [ "$output" = "[FOO]!
+	1 < "${BATS_TEST_DIRNAME}/rectangular-tabbed.txt"
+
+    assert_output - <<'EOF'
+[FOO]!
 [BAR]!
 [BAZ]!
 [END]!
 [foo]!
 [bar]!
 [baz]!
-[end]!" ]
+[end]!
+EOF
 }
