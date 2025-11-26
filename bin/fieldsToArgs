@@ -77,6 +77,7 @@ progressSink=
 with=
 errorRedir='2>&1'
 typeset -a colorArg=()
+additionalSuccessStatus=
 betweenCommand=
 typeset -a runWithPromptArgs=()
 while [ $# -ne 0 ]
@@ -105,6 +106,8 @@ do
 			runWithPromptArgs+=("$1"); shift; : ${with:=runWith};;
 	--initial-status|--no-count-on|--exit-on|--exit-unless|--comment|--summarize-failed|--summarize-failed-separator)
 			runWithPromptArgs+=("$1" "$2"); shift; shift; : ${with:=runWith};;
+	--status-99-is-noop)
+			runWithPromptArgs+=("$1"); shift; additionalSuccessStatus=99;;
 	--between-command)
 			shift; betweenCommand="$1"; shift;;
 
@@ -227,7 +230,7 @@ case "$with" in
 	    reportProgress() { :; }
 	fi
 
-	status=0
+	status=
 	: ${FIELDSTOARGS_HEADER_ID:="fieldsToArgs-$$-$RANDOM"}
 	exec 3<&0
 	while IFS=$'\n' read -r argCnt
@@ -235,17 +238,22 @@ case "$with" in
 	    readArgs || continue
 
 	    if [ ! "$isFirst" ] && [ -n "$betweenCommand" ]; then
-		setStatus $exitStatus; eval "$betweenCommand" <&3 || { exitStatus=$?; if [ $exitStatus -gt $status ]; then status=$exitStatus; fi; }
+		setStatus $exitStatus; eval "$betweenCommand" <&3; exitStatus=$?
+		if [ $exitStatus -gt ${status:--1} -a $exitStatus -ne ${additionalSuccessStatus:--1} ]; then
+		    status=$exitStatus
+		fi
 	    fi
 
 	    buildHeaderAndInterpolatedCommands
 	    [ -z "$header" ] || reportProgress "$header"
 
-	    (eval "${isHeader:+{}" "$interpolatedCommands" "${isHeader:+; \} $errorRedir | withHeader "${colorArg[@]}" --id '$FIELDSTOARGS_HEADER_ID' -- '${header:-(empty)}'}") <&3 || \
-		{ exitStatus=$?; if [ $exitStatus -gt $status ]; then status=$exitStatus; fi; }
+	    (eval "${isHeader:+{}" "$interpolatedCommands" "${isHeader:+; \} $errorRedir | withHeader "${colorArg[@]}" --id '$FIELDSTOARGS_HEADER_ID' -- '${header:-(empty)}'}") <&3; exitStatus=$?
+	    if [ $exitStatus -gt ${status:--1} -a $exitStatus -ne ${additionalSuccessStatus:--1} ]; then
+		status=$exitStatus
+	    fi
 	    isFirst=
 	done < <(parseFields)
-	exit $status
+	exit ${status:-${additionalSuccessStatus:-0}}
 	;;
     *)	printf >&2 'ASSERT: Invalid strategy: %s\n' "$with"; exit 3;;
 esac
