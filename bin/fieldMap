@@ -7,7 +7,7 @@ printShortUsage()
     local awkFilterOrFieldAndExpr="-x|--filter $awkExpr | [+-]N $awkExpr"
     # Note: short followed by long option; if the user knows the short one, she can
     # skim the long one.
-    printf 'Usage: cat FILE [...] | %q %s\n' "$(basename "$1")" "[-F|--field-separator FS] [-v|--assign var=val [-v ...]] [-u|--unbuffered] [-E|--coprocess-error abort|ignore [--coprocess-error-value TEXT]|restart] [-f|--function 'FUNCTION-NAME { ... }' [-f ...]] ($awkFilterOrFieldAndExpr) [...]"
+    printf 'Usage: cat FILE [...] | %q %s\n' "$(basename "$1")" "[-F|--field-separator FS] [-v|--assign var=val [-v ...]] [-u|--unbuffered] [-E|--coprocess-error abort|ignore [--coprocess-error-value TEXT]|restart] [-f|--function 'FUNCTION-NAME(PARAMETER-LIST) { ... }' [-f ...]] ($awkFilterOrFieldAndExpr) [...]"
     echo
     printf 'Usage: %q %s\n' "$(basename "$1")" "... [-i[SUFFIX]|--in-place[=SUFFIX]] ($awkFilterOrFieldAndExpr) [...] [--] [FILE ...] [-?|-h|--help]"
 }
@@ -70,9 +70,10 @@ HELPDESCRIPTION
 			    When COMMAND fails, the field will be empty /
 			    contain TEXT, but relaunch the COMMAND for the
 			    following field, and try to resume processing.
-    --function|-f 'FUNCTION-NAME { ... }'
-			    Define AWK FUNCTION-NAME (for use in AWK-EXPR; when
-			    a simple expression won't do).
+    --function|-f 'FUNCTION-NAME(PARAMETER-LIST) { STATEMENTS ... }'
+			    Define an AWK function FUNCTION-NAME with
+			    PARAMETER-LIST and STATEMENTS (for use in AWK-EXPR;
+			    when a simple expression won't do).
     --filter|-x (AWK-EXPR | "[AWK-EXPR][+]|COMMAND")
 			    Evaluate like a field mapping (but fieldNr is not
 			    defined) and drop the entire line if the result is a
