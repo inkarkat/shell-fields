@@ -6,14 +6,18 @@ shopt -qs extglob
 printUsage()
 {
     cat <<HELPTEXT
-Print selected field(s) N (-N counted from behind) from stdin, separated by SEP (or the original FS).
+Print selected field(s) N (-N counted from behind) from stdin, separated by SEP
+(or the passed OUTPUT-SEPARATOR, or the original FS).
 HELPTEXT
-    printf 'Usage: cat FILE [...] | %q %s\n' "$(basename "$1")" '[-F|--field-separator FS] [-u|--unbuffered] [-]N|SEP [...]'
+    echo
+    printf 'Usage: cat FILE [...] | %q %s\n' "$(basename "$1")" '[-F|--field-separator FS] [-s|--output-separator OUTPUT-SEPARATOR] [-u|--unbuffered] [-]N|SEP [...]'
     printf 'Usage: %q %s\n' "$(basename "$1")" "... -i|--input FILE [-i ...]|--input-files FILE [...] ${FIELD_INPUTFILES_END} [-]N|SEP [...] [-?|-h|--help]"
+    echo
     cat <<HELPTEXT
 Print everything but passed field(s) N (-N counted from behind) from stdin.
 HELPTEXT
-    printf 'Usage: cat FILE [...] | %q %s\n' "$(basename "$1")" '[-F|--field-separator FS] [-u|--unbuffered] -v|--remove [-]N [...]'
+    echo
+    printf 'Usage: cat FILE [...] | %q %s\n' "$(basename "$1")" '[-F|--field-separator FS] [-s|--output-separator OUTPUT-SEPARATOR] [-u|--unbuffered] -v|--remove [-]N [...]'
     printf 'Usage: %q %s\n' "$(basename "$1")" "... -i|--input FILE [-i ...]|--input-files FILE [...] ${FIELD_INPUTFILES_END} -v|--remove [-]N [...] [-?|-h|--help]"
 }
 fieldNumberError()
@@ -26,6 +30,7 @@ fieldNumberError()
 
 isBuffered=t
 typeset -a fsArgs=()
+outputSeparator=
 typeset -a inputFilespecs=()
 isRemoveFields=
 while [ $# -ne 0 ]
@@ -52,6 +57,8 @@ do
 	--remove|-v)	shift; isRemoveFields=t;;
 	--field-separator|-F)
 			shift; fsArgs=(-F "$1"); shift;;
+	--output-separator|-s)
+			shift; outputSeparator="${1?}"; shift;;
 	--unbuffered|-u)
 			shift; isBuffered=;;
 	--)		shift; break;;
@@ -64,18 +71,25 @@ done
 
 outputSeparatorDetermination='
 NR == 1 {
-    # Use FS as output separator if it is not a regular expression.
-    firstTwoFields = $1 FS $2
-    if (NF < 2 || substr($0, 1, length(firstTwoFields)) == firstTwoFields) {
-	OFS = FS
-    } else if (FS == " " && (substr($0, 1, length(firstTwoFields)) == $1 "\t" $2)) {
-	OFS = "\t"
+    # Use passed OUTPUT-SEPARATOR, fall back to FS unless it is a regular expression.
+    if (outputSeparator != "") {
+	OFS = outputSeparator
+    } else {
+	firstTwoFields = $1 FS $2
+	if (NF < 2 || substr($0, 1, length(firstTwoFields)) == firstTwoFields) {
+	    OFS = FS
+	} else if (FS == " " && (substr($0, 1, length(firstTwoFields)) == $1 "\t" $2)) {
+	    OFS = "\t"
+	} else {
+	    print "Note: Using space as default output field separator; change via -s|--output-separator OUTPUT-SEPARATOR or pass a non-regular expression -F|--field-separator FIELD-SEPARATOR." > "/dev/stderr"
+	}
     }
 }
 '
 
 if [ "$isRemoveFields" ]; then
     exec awk "${fsArgs[@]}" \
+	-v "outputSeparator=${outputSeparator//\\/\\\\}" \
 	-v "isBuffered=$isBuffered" \
 	-v nrs="$*" '
 BEGIN {
@@ -133,6 +147,7 @@ else
     [ "$hasFieldNumber" ] || fieldNumberError
 
     exec awk "${fsArgs[@]}" \
+	-v "outputSeparator=${outputSeparator//\\/\\\\}" \
 	-v "isBuffered=$isBuffered" \
 '
 function fieldFromEnd(n)
