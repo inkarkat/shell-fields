@@ -6,12 +6,13 @@ shopt -qs extglob
 printUsage()
 {
     cat <<HELPTEXT
-Print selected field(s) N (-N counted from behind) from stdin, separated by SEP
-(or the passed OUTPUT-SEPARATOR, or the original FS).
+Print selected field(s) N (-N counted from behind, N... including all following,
+-N... including all preceding) from stdin, separated by SEP (or the passed
+OUTPUT-SEPARATOR, or the original FS).
 HELPTEXT
     echo
-    printf 'Usage: cat FILE [...] | %q %s\n' "$(basename "$1")" '[-F|--field-separator FS] [-s|--output-separator OUTPUT-SEPARATOR] [-u|--unbuffered] [-]N|SEP [...]'
-    printf 'Usage: %q %s\n' "$(basename "$1")" "... -i|--input FILE [-i ...]|--input-files FILE [...] ${FIELD_INPUTFILES_END} [-]N|SEP [...] [-?|-h|--help]"
+    printf 'Usage: cat FILE [...] | %q %s\n' "$(basename "$1")" '[-F|--field-separator FS] [-s|--output-separator OUTPUT-SEPARATOR] [-u|--unbuffered] [-]N[...]|SEP [...]'
+    printf 'Usage: %q %s\n' "$(basename "$1")" "... -i|--input FILE [-i ...]|--input-files FILE [...] ${FIELD_INPUTFILES_END} [-]N[...]|SEP [...] [-?|-h|--help]"
     echo
     cat <<HELPTEXT
 Print everything but passed field(s) N (-N counted from behind) from stdin.
@@ -62,7 +63,8 @@ do
 	--unbuffered|-u)
 			shift; isBuffered=;;
 	--)		shift; break;;
-	-+([0-9]))	break;;
+	-+([0-9])?(...))
+			break;;
 	-*)		{ echo "ERROR: Unknown option \"$1\"!"; echo; printUsage "$0"; } >&2; exit 2;;
 	*)		break;;
     esac
@@ -121,6 +123,12 @@ BEGIN {
 }
 ' "${inputFilespecs[@]}"
 else
+    handleDelayed()
+    {
+	[ -n "$delayedPrecedingFieldNr" ] || return
+	selectors+=" precedingFieldsFromEnd($delayedPrecedingFieldNr, $separator)"
+	delayedPrecedingFieldNr=
+    }
     hasFieldNumber=
     isSubsequent=
     separator='OFS'
@@ -128,12 +136,26 @@ else
     for arg
     do
 	case $arg in
-	    +([0-9]))   selectors+=" ${isSubsequent:+$separator }\$$arg"
+	    +([0-9]))   handleDelayed
+			selectors+=" ${isSubsequent:+$separator }\$$arg"
 			separator='OFS'
 			hasFieldNumber=t
 			;;
-	    -+([0-9]))  selectors+=" ${isSubsequent:+$separator }fieldFromEnd(${arg#-})"
+	    +([0-9])...)
+			handleDelayed
+			selectors+=" ${isSubsequent:+$separator }followingFields(${arg%...}, $separator)"
 			separator='OFS'
+			hasFieldNumber=t
+			;;
+	    -+([0-9]))  handleDelayed
+			selectors+=" ${isSubsequent:+$separator }fieldFromEnd(${arg#-})"
+			separator='OFS'
+			hasFieldNumber=t
+			;;
+	    -+([0-9])...)
+			handleDelayed
+			arg="${arg#-}"; arg="${arg%...}"
+			delayedPrecedingFieldNr=$arg
 			hasFieldNumber=t
 			;;
 	    *)		arg="${arg//\\/\\\\}"
@@ -144,15 +166,32 @@ else
 	esac
 	isSubsequent=t
     done
+    handleDelayed
     [ "$hasFieldNumber" ] || fieldNumberError
 
     exec awk "${fsArgs[@]}" \
 	-v "outputSeparator=${outputSeparator//\\/\\\\}" \
 	-v "isBuffered=$isBuffered" \
 '
+function followingFields(n, separator,      result, i)
+{
+    result = ""
+    for (i = n; i <= NF; ++i) {
+	result = result (result == "" ? "" : separator) $i
+    }
+    return result
+}
 function fieldFromEnd(n)
 {
     return (n < NF ? $(NF - n + 1) : "")
+}
+function precedingFieldsFromEnd(n, separator,      result, i)
+{
+    result = ""
+    for (i = 1; i <= (NF - n + 1); ++i) {
+	result = result (result == "" ? "" : separator) $i
+    }
+    return result
 }
 '"
 $outputSeparatorDetermination
