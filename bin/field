@@ -8,11 +8,14 @@ printUsage()
     cat <<HELPTEXT
 Print selected field(s) N (-N counted from behind) from stdin, separated by SEP (or the original FS).
 HELPTEXT
+    echo
     printf 'Usage: cat FILE [...] | %q %s\n' "$(basename "$1")" '[-F|--field-separator FS] [-u|--unbuffered] [-]N|SEP [...]'
     printf 'Usage: %q %s\n' "$(basename "$1")" "... -i|--input FILE [-i ...]|--input-files FILE [...] ${FIELD_INPUTFILES_END} [-]N|SEP [...] [-?|-h|--help]"
+    echo
     cat <<HELPTEXT
 Print everything but passed field(s) N (-N counted from behind) from stdin.
 HELPTEXT
+    echo
     printf 'Usage: cat FILE [...] | %q %s\n' "$(basename "$1")" '[-F|--field-separator FS] [-u|--unbuffered] -v|--remove [-]N [...]'
     printf 'Usage: %q %s\n' "$(basename "$1")" "... -i|--input FILE [-i ...]|--input-files FILE [...] ${FIELD_INPUTFILES_END} -v|--remove [-]N [...] [-?|-h|--help]"
 }
