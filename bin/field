@@ -6,12 +6,13 @@ shopt -qs extglob
 printUsage()
 {
     cat <<HELPTEXT
-Print selected field(s) N (-N counted from behind) from stdin, separated by SEP
-(or the passed OUTPUT-SEPARATOR, or the original FS).
+Print selected field(s) N (-N counted from behind, N... including all following)
+from stdin, separated by SEP (or the passed OUTPUT-SEPARATOR, or the original
+FS).
 HELPTEXT
     echo
-    printf 'Usage: cat FILE [...] | %q %s\n' "$(basename "$1")" '[-F|--field-separator FS] [-s|--output-separator OUTPUT-SEPARATOR] [-u|--unbuffered] [-]N|SEP [...]'
-    printf 'Usage: %q %s\n' "$(basename "$1")" "... -i|--input FILE [-i ...]|--input-files FILE [...] ${FIELD_INPUTFILES_END} [-]N|SEP [...] [-?|-h|--help]"
+    printf 'Usage: cat FILE [...] | %q %s\n' "$(basename "$1")" '[-F|--field-separator FS] [-s|--output-separator OUTPUT-SEPARATOR] [-u|--unbuffered] [-]N|N...|SEP [...]'
+    printf 'Usage: %q %s\n' "$(basename "$1")" "... -i|--input FILE [-i ...]|--input-files FILE [...] ${FIELD_INPUTFILES_END} [-]N|N...|SEP [...] [-?|-h|--help]"
     echo
     cat <<HELPTEXT
 Print everything but passed field(s) N (-N counted from behind) from stdin.
@@ -136,6 +137,11 @@ else
 			separator='OFS'
 			hasFieldNumber=t
 			;;
+	    +([0-9])...)
+			selectors+=" ${isSubsequent:+$separator }followingFields(${arg%...}, $separator)"
+			separator='OFS'
+			hasFieldNumber=t
+			;;
 	    *)		arg="${arg//\\/\\\\}"
 			arg="${arg//\"/\\\"}"
 			arg="${arg//$'\n'/\\\n}"
@@ -153,6 +159,14 @@ else
 function fieldFromEnd(n)
 {
     return (n < NF ? $(NF - n + 1) : "")
+}
+function followingFields(n, separator,      result, i)
+{
+    result = ""
+    for (i = n; i <= NF; ++i) {
+	result = result (result == "" ? "" : separator) $i
+    }
+    return result
 }
 '"
 $outputSeparatorDetermination
