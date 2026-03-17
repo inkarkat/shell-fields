@@ -242,11 +242,11 @@ NR == 1 {
     if (outputSeparator != "") {
 	OFS = outputSeparator
     } else {
-	firstTwoFields = $1 FS $2
-	if (NF < 2 || substr($0, 1, length(firstTwoFields)) == firstTwoFields) {
+	firstFieldAndSep = $1 FS
+	if (NF == 0 || $0 == $1 || substr($0, 1, length(FS)) == FS || substr($0, 1, length(firstFieldAndSep)) == firstFieldAndSep) {
 	    OFS = FS
 	} else if (FS == " ") {
-	    OFS = ((substr($0, 1, length(firstTwoFields)) == $1 "\t" $2) ? "\t" : " ")
+	    OFS = (($0 ~ /^\t/ || substr($0, 1, length(firstFieldAndSep)) == $1 "\t") ? "\t" : " ")
 	} else {
 	    print "Note: Using space as default output field separator; change via -s|--output-separator OS or pass a non-regular expression -F|--field-separator FS." > "/dev/stderr"
 	}

@@ -16,7 +16,7 @@ newLineMarker="$ONFIELDCHANGE_NEW_LINE_MARKER"; unset ONFIELDCHANGE_NEW_LINE_MAR
 
 printShortUsage()
 {
-    printf 'Usage: cat FILE [...] | %q %s\n' "$(basename "$1")" "[-F|--field-separator FS] [-u|--unbuffered] [--include-first] [--include-last] [--default-value VAL] [-R|--remove-fields] -c|--command \"COMMANDLINE\" [-c ...] | --exec SIMPLECOMMAND [...] ${lineNumberMarker:+[}${lineNumberMarker}${lineNumberMarker:+]} ${previousValueMarker:+[}${previousValueMarker}${previousValueMarker:+]} ${newValueMarker:+[}${newValueMarker}${newValueMarker:+]} ${previousLineMarker:+[}${previousLineMarker}${previousLineMarker:+]} ${newLineMarker:+[}${newLineMarker}${newLineMarker:+]} [...] $ONFIELDCHANGE_EXEC_END [--exec ...]) [-]N [...]"
+    printf 'Usage: cat FILE [...] | %q %s\n' "$(basename "$1")" "[-F|--field-separator FS] [-s|--output-separator OS] [-u|--unbuffered] [--include-first] [--include-last] [--default-value VAL] [-R|--remove-fields] -c|--command \"COMMANDLINE\" [-c ...] | --exec SIMPLECOMMAND [...] ${lineNumberMarker:+[}${lineNumberMarker}${lineNumberMarker:+]} ${previousValueMarker:+[}${previousValueMarker}${previousValueMarker:+]} ${newValueMarker:+[}${newValueMarker}${newValueMarker:+]} ${previousLineMarker:+[}${previousLineMarker}${previousLineMarker:+]} ${newLineMarker:+[}${newLineMarker}${newLineMarker:+]} [...] $ONFIELDCHANGE_EXEC_END [--exec ...]) [-]N [...]"
     echo
     printf 'Usage: %q %s\n' "$(basename "$1")" '... [-i[SUFFIX]|--in-place[=SUFFIX]] [--] [FILE ...] [-?|-h|--help]'
 }
@@ -47,6 +47,9 @@ HELPDESCRIPTION
     cat <<HELPTEXT
     --field-separator|-F FS
 			Use FS as the input field separator (as with AWK).
+    --output-separator|-s OS
+			Use OS (instead of FS or the default space) to join the
+			fields.
     --unbuffered|-u	Immediately output each read line.
     --include-first	Execute the command on the first field value, too.
     --include-last	Execute the command on the last field value, too.
@@ -81,8 +84,9 @@ addCommand()
 }
 
 isBuffered=t
-typeset -a awkArgs=()
 typeset -a awkCall=(awk)
+typeset -a awkArgs=()
+outputSeparator=
 isInPlace=
 inPlaceExtension=
 typeset -a fieldSelectors=()
@@ -108,6 +112,8 @@ do
 	--command|-c)	shift; addCommand "${1:?}"; shift;;
 	--field-separator|-F)
 			awkArgs+=("$1" "$2"); shift; shift;;
+	--output-separator|-s)
+			shift; outputSeparator="${1?}"; shift;;
 	-i|--in-place)	isInPlace=t; shift;;
 	-i?*|--in-place=*)
 			isInPlace=t; inPlaceExtension="${1#-i}"; inPlaceExtension="${inPlaceExtension#--in-place=}"; shift;;
@@ -157,6 +163,7 @@ fi
 
 IFS=$'\n'
 exec "${awkCall[@]}" "${awkArgs[@]}" \
+    -v "outputSeparator=${outputSeparator//\\/\\\\}" \
     -v "isInPlace=$isInPlace" \
     -v "isIncludeFirst=$isIncludeFirst" \
     -v "isIncludeLast=$isIncludeLast" \
@@ -210,12 +217,18 @@ BEGIN {
     }
 }
 NR == 1 {
-    # Use FS as output separator if it is not a regular expression.
-    firstTwoFields = $1 FS $2
-    if (NF < 2 || substr($0, 1, length(firstTwoFields)) == firstTwoFields) {
-	OFS = FS
-    } else if (FS == " " && (substr($0, 1, length(firstTwoFields)) == $1 "\t" $2)) {
-	OFS = "\t"
+    # Use passed OS, fall back to FS unless it is a regular expression.
+    if (outputSeparator != "") {
+	OFS = outputSeparator
+    } else {
+	firstFieldAndSep = $1 FS
+	if (NF == 0 || $0 == $1 || substr($0, 1, length(FS)) == FS || substr($0, 1, length(firstFieldAndSep)) == firstFieldAndSep) {
+	    OFS = FS
+	} else if (FS == " ") {
+	    OFS = (($0 ~ /^\t/ || substr($0, 1, length(firstFieldAndSep)) == $1 "\t") ? "\t" : " ")
+	} else {
+	    print "Note: Using space as default output field separator; change via -s|--output-separator OS or pass a non-regular expression -F|--field-separator FS." > "/dev/stderr"
+	}
     }
 }
 {

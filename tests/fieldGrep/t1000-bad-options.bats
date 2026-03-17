@@ -14,9 +14,9 @@ load fixture
     assert_line -n 3 -e '^Usage:'
 }
 
-@test "regular expression field separator prints an error message" {
-    run -2 fieldGrep --input "${BATS_TEST_DIRNAME}/tabbed.txt" -F ' +' --regexp . 2
-    assert_output 'ERROR: The field separator has to be a literal string; it cannot be a regular expression.'
+@test "regular expression field separator prints a note" {
+    run -0 --separate-stderr fieldGrep --input "${BATS_TEST_DIRNAME}/tabbed.txt" -F ' +' --regexp . 2
+    output="$stderr" assert_output 'Note: Using space as default output field separator; change via -s|--output-separator OS or pass a non-regular expression -F|--field-separator FS.'
 }
 
 @test "a non-number argument at the end prints an error message" {

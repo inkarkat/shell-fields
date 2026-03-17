@@ -12,3 +12,8 @@ load fixture
     run -2 field --input "${BATS_TEST_DIRNAME}/tabbed.txt" --remove 2 x 3 y
     assert_output 'ERROR: Not a number: x'
 }
+
+@test "regular expression field separator prints a note" {
+    run -0 --separate-stderr field --field-separator ' +' 1 <<<'foo bar   baz'
+    output="$stderr" assert_output 'Note: Using space as default output field separator; change via -s|--output-separator OS or pass a non-regular expression -F|--field-separator FS.'
+}

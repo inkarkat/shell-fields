@@ -10,14 +10,14 @@ printUsage()
 Print lines where selected field(s) N (-N counted from behind), separated by FS, match a PATTERN.
 HELPTEXT
     echo
-    printf 'Usage: cat FILE [...] | %q %s\n' "$(basename "$1")" '[-F|--field-separator FS] [-u|--unbuffered] [GREP-OPTIONS ...] -e|--regexp PATTERN|-f|--file FILE [...] [-]N [...]'
+    printf 'Usage: cat FILE [...] | %q %s\n' "$(basename "$1")" '[-F|--field-separator FS] [-s|--output-separator OS] [-u|--unbuffered] [GREP-OPTIONS ...] -e|--regexp PATTERN|-f|--file FILE [...] [-]N [...]'
     printf 'Usage: %q %s\n' "$(basename "$1")" "... -I|--input FILE [-i ...]|--input-files FILE [...] ${FIELDGREP_INPUTFILES_END} GREP-OPTIONS [...] [-]N [...] [-?|-h|--help]"
     echo
     cat <<HELPTEXT
 Print lines where any but the passed field(s) N (-N counted from behind), separated by FS, match a PATTERN.
 HELPTEXT
     echo
-    printf 'Usage: cat FILE [...] | %q %s\n' "$(basename "$1")" '[-F|--field-separator FS] [-u|--unbuffered] -V|--invert-fields [GREP-OPTIONS ...] -e|--regexp PATTERN|-f|--file FILE [...] [-]N [...]'
+    printf 'Usage: cat FILE [...] | %q %s\n' "$(basename "$1")" '[-F|--field-separator FS] [-s|--output-separator OS] [-u|--unbuffered] -V|--invert-fields [GREP-OPTIONS ...] -e|--regexp PATTERN|-f|--file FILE [...] [-]N [...]'
     printf 'Usage: %q %s\n' "$(basename "$1")" "... -I|--input FILE [-i ...]|--input-files FILE [...] ${FIELDGREP_INPUTFILES_END}-V|--invert-fields GREP-OPTIONS [...] [-]N [...] [-?|-h|--help]"
 }
 
@@ -66,6 +66,7 @@ typeset -a grepPatternArgs=()
 unset separatorGrepArgs
 typeset -a fsArgs=()
 fieldSeparator='[	 ]'
+outputSeparator=
 typeset -a inputFilespecs=()
 isInvertFields=
 isOnlyMatching=
@@ -115,6 +116,7 @@ do
 			;;
 	--invert-fields|-V)	shift; isInvertFields=t;;
 	--field-separator|-F)	shift; fsArgs=(-F "$1"); fieldSeparator="$1"; shift;;
+	--output-separator|-s)	shift; outputSeparator="${1?}"; shift;;
 	--unbuffered|-u)	shift; isBuffered=''; grepBufferedArgs=(--line-buffered);;
 	--)			shift; break;;
 	-+([0-9]))		break;;
@@ -161,6 +163,7 @@ fi
 
 : ${isInvertFields:=0}
 awk "${fsArgs[@]}" \
+    -v "outputSeparator=${outputSeparator//\\/\\\\}" \
     -v "isUnBuffered=${grepBufferedArgs[*]:+t}" \
     -v "isInvertFields=${isInvertFields//t/1}" \
     -v nrs="$*" '
@@ -185,14 +188,18 @@ BEGIN {
     }
 }
 NR == 1 {
-    # Use FS as output separator; it cannot be a regular expression here.
-    firstTwoFields = $1 FS $2
-    if (NF < 2 || substr($0, 1, length(firstTwoFields)) == firstTwoFields) {
-	OFS = FS
-    } else if (FS == " ") {
-	OFS = ((substr($0, 1, length(firstTwoFields)) == $1 "\t" $2) ? "\t" : " ")
+    # Use passed OS, fall back to FS unless it is a regular expression.
+    if (outputSeparator != "") {
+	OFS = outputSeparator
     } else {
-	abort("ERROR: The field separator has to be a literal string; it cannot be a regular expression.")
+	firstFieldAndSep = $1 FS
+	if (NF == 0 || $0 == $1 || substr($0, 1, length(FS)) == FS || substr($0, 1, length(firstFieldAndSep)) == firstFieldAndSep) {
+	    OFS = FS
+	} else if (FS == " ") {
+	    OFS = (($0 ~ /^\t/ || substr($0, 1, length(firstFieldAndSep)) == $1 "\t") ? "\t" : " ")
+	} else {
+	    print "Note: Using space as default output field separator; change via -s|--output-separator OS or pass a non-regular expression -F|--field-separator FS." > "/dev/stderr"
+	}
     }
 }
 {
