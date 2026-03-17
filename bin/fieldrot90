@@ -1,25 +1,41 @@
 #!/usr/bin/gawk -f
 
 BEGIN {
-    if (ARGV[1] ~ /^(--(help|man|usage)|-[Hh?])$/) {
-	print "Rotates field columns and rows clockwise (counter-clockwise with --reverse)"
-	print "by 90 degrees."
-	print ""
-	print "Usage: fieldrot90 [-F|--field-separator FS] [--reverse] FILE [...] [-?|-H|--man|--usage]"
-	print "Usage: cat FILE [...] | fieldrot90 [-F|--field-separator FS] [--reverse]"
-	exit
-    } else if (ARGV[1] == "--reverse") {
-	isReverse = 1
-	delete ARGV[1]
+    ARGB = 1
+    while (1) {
+	if (ARGV[ARGB] ~ /^(--(help|man|usage)|-[Hh?])$/) {
+	    print "Rotates field columns and rows clockwise (counter-clockwise with --reverse)"
+	    print "by 90 degrees."
+	    print ""
+	    print "Usage: fieldrot90 [-F|--field-separator FS] [-s|--output-separator OS] [--reverse] FILE [...] [-?|-H|--man|--usage]"
+	    print "Usage: cat FILE [...] | fieldrot90 [-F|--field-separator FS] [-s|--output-separator OS] [--reverse]"
+	    isHelp = 1
+	    exit
+	} else if (ARGV[1] == "--reverse") {
+	    isReverse = 1
+	    delete ARGV[1]
+	} else if (ARGV[ARGB] == "--output-separator" || ARGV[ARGB] == "-s") {
+	    delete ARGV[ARGB++]
+	    outputSeparator = ARGV[ARGB]
+	    delete ARGV[ARGB++]
+	} else {
+	    break
+	}
     }
 }
 NR == 1 {
-    # Use FS as output separator if it is not a regular expression.
-    firstTwoFields = $1 FS $2
-    if (NF < 2 || substr($0, 1, length(firstTwoFields)) == firstTwoFields) {
-	OFS = FS
-    } else if (FS == " " && (substr($0, 1, length(firstTwoFields)) == $1 "\t" $2)) {
-	OFS = "\t"
+    # Use passed OS, fall back to FS unless it is a regular expression.
+    if (outputSeparator != "") {
+	OFS = outputSeparator
+    } else {
+	firstFieldAndSep = $1 FS
+	if (NF == 0 || $0 == $1 || substr($0, 1, length(FS)) == FS || substr($0, 1, length(firstFieldAndSep)) == firstFieldAndSep) {
+	    OFS = FS
+	} else if (FS == " ") {
+	    OFS = (($0 ~ /^\t/ || substr($0, 1, length(firstFieldAndSep)) == $1 "\t") ? "\t" : " ")
+	} else {
+	    print "Note: Using space as default output field separator; change via -s|--output-separator OS or pass a non-regular expression -F|--field-separator FS." > "/dev/stderr"
+	}
     }
 }
 {
@@ -28,6 +44,8 @@ NR == 1 {
     maxN = (fieldNum[NR] > maxN ? fieldNum[NR] : maxN)
 }
 END {
+    if (isHelp) exit
+
     # i turns original columns into fields
     # j turns original lines into characters
     if (isReverse) {
