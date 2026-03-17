@@ -37,6 +37,7 @@ NR == 1 {
 	    print "Note: Using space as default output field separator; change via -s|--output-separator OS or pass a non-regular expression -F|--field-separator FS." > "/dev/stderr"
 	}
     }
+    isJoinRunsOfWhitespace = (FS == " " && outputSeparator == "")
 }
 {
     line[NR][0] = ""
@@ -53,7 +54,7 @@ END {
 	    rotatedLine = ""
 	    sep = ""
 	    for (j = 1; j <= NR; ++j) {
-		rotatedLine = rotatedLine (fieldNum[j] >= i ? sep line[j][i] : sep)
+		rotatedLine = rotatedLine (fieldNum[j] >= i ? sep line[j][i] : (isJoinRunsOfWhitespace ? "" : sep))
 		sep = OFS
 
 		isOnlyEmptyFollow = 1
@@ -74,7 +75,7 @@ END {
 	    rotatedLine = ""
 	    sep = ""
 	    for (j = NR; j > 0; --j) {
-		rotatedLine = rotatedLine (fieldNum[j] >= i ? sep line[j][i] : sep)
+		rotatedLine = rotatedLine (fieldNum[j] >= i ? sep line[j][i] : (isJoinRunsOfWhitespace ? "" : sep))
 		sep = OFS
 
 		isOnlyEmptyFollow = 1

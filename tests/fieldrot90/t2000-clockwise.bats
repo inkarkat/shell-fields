@@ -16,9 +16,9 @@ EOF
     assert_output - <<'EOF'
 end	lulli	quux	baz	bar	foo
 six	five	four	three	two	one
-	no	even		more
+	no	even	more
 	gap	more
-		fields
+	fields
 EOF
 }
 
@@ -27,9 +27,9 @@ EOF
     assert_output - <<'EOF'
 end	lulli	quux	baz	bar	foo
 six	five	four	three	two	one
-final	gap	even		more
-		more
-		fields
+final	gap	even	more
+	more
+	fields
 EOF
 }
 
@@ -37,9 +37,9 @@ EOF
     run -0 fieldrot90 "${BATS_TEST_DIRNAME}/double-tabbed.txt"
     assert_output - <<'EOF'
 end	five	quux	three	bar	one
-		even		two
-		four		more
-		more
-		fields
+	even	two
+	four	more
+	more
+	fields
 EOF
 }
