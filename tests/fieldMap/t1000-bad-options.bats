@@ -19,3 +19,8 @@ load fixture
     assert_line -n 0 'ERROR: Invalid value for --coprocess-error: doesNotExist'
     assert_line -n 2 -e '^Usage:'
 }
+
+@test "regular expression field separator prints a note" {
+    run -0 --separate-stderr fieldMap --field-separator ' +' 1 0 <<<'foo bar   baz'
+    output="$stderr" assert_output 'Note: Using space as default output field separator; change via -s|--output-separator OS or pass a non-regular expression -F|--field-separator FS.'
+}

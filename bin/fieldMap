@@ -7,7 +7,7 @@ printShortUsage()
     local awkFilterOrFieldAndExpr="-x|--filter $awkExpr | [+-]N $awkExpr"
     # Note: short followed by long option; if the user knows the short one, she can
     # skim the long one.
-    printf 'Usage: cat FILE [...] | %q %s\n' "$(basename "$1")" "[-F|--field-separator FS] [-v|--assign var=val [-v ...]] [-u|--unbuffered] [-E|--coprocess-error abort|ignore [--coprocess-error-value TEXT]|restart] [-f|--function 'FUNCTION-NAME(PARAMETER-LIST) { ... }' [-f ...]] ($awkFilterOrFieldAndExpr) [...]"
+    printf 'Usage: cat FILE [...] | %q %s\n' "$(basename "$1")" "[-F|--field-separator FS] [-s|--output-separator OS] [-v|--assign var=val [-v ...]] [-u|--unbuffered] [-E|--coprocess-error abort|ignore [--coprocess-error-value TEXT]|restart] [-f|--function 'FUNCTION-NAME(PARAMETER-LIST) { ... }' [-f ...]] ($awkFilterOrFieldAndExpr) [...]"
     echo
     printf 'Usage: %q %s\n' "$(basename "$1")" "... [-i[SUFFIX]|--in-place[=SUFFIX]] ($awkFilterOrFieldAndExpr) [...] [--] [FILE ...] [-?|-h|--help]"
 }
@@ -54,6 +54,9 @@ HELPDESCRIPTION
 			    line buffering via a command-line argument (e.g.
 			    sed --unbuffered), or through a command like stdbuf.
     --field-separator|-F FS Use FS as the input field separator (as with AWK).
+    --output-separator|-s OS
+			    Use OUTPUT-SEPARATOR (instead of FIELD-SEPARATOR or
+			    the default space) to join the fields.
     --assign|-v var=val	    Assign the value val to the variable var; these can
 			    then be used in AWK-EXPR.
     --unbuffered|-u	    Immediately output each read line.
@@ -107,6 +110,7 @@ parseExpression()
 isBuffered=t
 typeset -a awkCall=(awk)
 typeset -a awkArgs=()
+outputSeparator=
 typeset -a fields=()
 typeset -a expressionCode=()
 typeset -a filterCode=()
@@ -123,6 +127,7 @@ do
     case "$1" in
 	--help|-h|-\?)		shift; printLongUsage "$0"; exit 0;;
 	--field-separator|-F)	awkArgs+=("$1" "$2"); shift; shift;;
+	--output-separator|-s)	shift; outputSeparator="${1?}"; shift;;
 	--assign|-v)		awkVariableAssignments+=("$1" "${2?}"); shift; shift;;
 	--unbuffered|-u)	shift; isBuffered=;;
 	--coprocess-error|-E)	shift
@@ -167,6 +172,7 @@ fi
 
 IFS=$'\n'
 exec "${awkCall[@]}" "${awkArgs[@]}" \
+    -v "outputSeparator=${outputSeparator//\\/\\\\}" \
     -v "isBuffered=$isBuffered" \
     -v "fieldList=${fields[*]//\\/\\\\}" \
     -v "coprocList=${coprocs[*]//\\/\\\\}" \
@@ -232,15 +238,18 @@ END {
     }
 }
 NR == 1 {
-    # Use FS as output separator; it cannot be a regular expression here.
-    firstTwoFields = $1 FS $2
-    if (NF < 2 || substr($0, 1, length(firstTwoFields)) == firstTwoFields) {
-	OFS = FS
-    } else if (FS == " ") {
-	OFS = ((substr($0, 1, length(firstTwoFields)) == $1 "\t" $2) ? "\t" : " ")
+    # Use passed OS, fall back to FS unless it is a regular expression.
+    if (outputSeparator != "") {
+	OFS = outputSeparator
     } else {
-	print "ERROR: The field separator has to be a literal string; it cannot be a regular expression." > "/dev/stderr"
-	exit 2
+	firstFieldAndSep = $1 FS
+	if (NF == 0 || $0 == $1 || substr($0, 1, length(FS)) == FS || substr($0, 1, length(firstFieldAndSep)) == firstFieldAndSep) {
+	    OFS = FS
+	} else if (FS == " ") {
+	    OFS = (($0 ~ /^\t/ || substr($0, 1, length(firstFieldAndSep)) == $1 "\t") ? "\t" : " ")
+	} else {
+	    print "Note: Using space as default output field separator; change via -s|--output-separator OS or pass a non-regular expression -F|--field-separator FS." > "/dev/stderr"
+	}
     }
 }
 {

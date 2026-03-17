@@ -8,7 +8,7 @@ fileMarker="$EACHFIELD_FILE_MARKER"; unset EACHFIELD_FILE_MARKER
 
 printShortUsage()
 {
-    printf 'Usage: cat FILE [...] | %q %s\n' "$(basename "$1")" "[-F|--field-separator FS] [--separator|-s SEP] [(--pass | -c|--command \"COMMANDLINE\" [-c ...] | --exec SIMPLECOMMAND [...] ${fileMarker:+[}${fileMarker}${fileMarker:+] [...]} $EACHFIELD_EXEC_END [--exec ...]) [[-]N[,[-]M,...] [...]]] [...]"
+    printf 'Usage: cat FILE [...] | %q %s\n' "$(basename "$1")" "[-F|--field-separator FS] [-s|--output-separator OS] [(--pass | -c|--command \"COMMANDLINE\" [-c ...] | --exec SIMPLECOMMAND [...] ${fileMarker:+[}${fileMarker}${fileMarker:+] [...]} $EACHFIELD_EXEC_END [--exec ...]) [[-]N[,[-]M,...] [...]]] [...]"
     echo
     printf 'Usage: %q %s\n' "$(basename "$1")" '... [-i[SUFFIX]|--in-place[=SUFFIX]] [--] [FILE ...] [-?|-h|--help]'
 }
@@ -35,8 +35,9 @@ HELPDESCRIPTION
     cat <<HELPTEXT
     --field-separator|-F FS
 			Use FS as the input field separator (as with AWK).
-    --separator|-s SEP	Use SEP (instead of the original field separator)
-			between resulting fields.
+    --output-separator|-s OS
+			Use OS (instead of FS or the default space) between resulting
+			fields.
     --pass		Pass the field rows through unchanged; like
 			--command cat (but more efficient).
     --command|-c CMD	Execute CMD as a command-line. Preceding field rows
@@ -58,7 +59,7 @@ EXIT STATUS:
 
 Example:
 HELPTEXT
-    printf '%q %s\n' "$(basename "$1")" "-F : -s ' ' --exec minmax --separator .. \; 3 4 /etc/passwd"
+    printf '%q %s\n' "$(basename "$1")" "-F : -s ' ' --exec minmax --output-separator .. \; 3 4 /etc/passwd"
 }
 
 addCommand()
@@ -86,7 +87,8 @@ do
 	--command|-c)	allOptions+=("$1"); shift; addCommand "${1:?}"; shift;;
 	--field-separator|-F)
 			awkArgs+=("$1" "$2"); allOptions+=("$1" "$2"); shift; shift;;
-	--separator|-s)	allOptions+=("$1" "${2?}"); shift; outputSeparator="$1"; shift;;
+	--output-separator|-s)
+			allOptions+=("$1" "${2?}"); shift; outputSeparator="${1?}"; shift;;
 	-i|--in-place)	allOptions+=("$1"); shift; isInPlace=t;;
 	-i?*|--in-place=*)
 			isInPlace=t; inPlaceExtension="${1#-i}"; inPlaceExtension="${inPlaceExtension#--in-place=}"; allOptions+=("$1"); shift;;
@@ -128,6 +130,7 @@ tempDirspec="$(mktemp --directory --tmpdir "$(basename -- "$0")-XXXXXX" 2>/dev/n
 
 IFS=$'\n'
 fieldSeparator="$(awk "${awkArgs[@]}" \
+    -v "outputSeparator=${outputSeparator//\\/\\\\}" \
     -v "tempDirspec=${tempDirspec//\\/\\\\}" \
     -v "fieldSelectorList=${fieldSelectors[*]//\\/\\\\}" \
 '
@@ -148,12 +151,18 @@ BEGIN {
     }
 }
 NR == 1 {
-    # Use FS as output separator if it is not a regular expression.
-    firstTwoFields = $1 FS $2
-    if (NF < 2 || substr($0, 1, length(firstTwoFields)) == firstTwoFields) {
-	OFS = FS
-    } else if (FS == " " && (substr($0, 1, length(firstTwoFields)) == $1 "\t" $2)) {
-	OFS = "\t"
+    # Use passed OS, fall back to FS unless it is a regular expression.
+    if (outputSeparator != "") {
+	OFS = outputSeparator
+    } else {
+	firstFieldAndSep = $1 FS
+	if (NF == 0 || $0 == $1 || substr($0, 1, length(FS)) == FS || substr($0, 1, length(firstFieldAndSep)) == firstFieldAndSep) {
+	    OFS = FS
+	} else if (FS == " ") {
+	    OFS = (($0 ~ /^\t/ || substr($0, 1, length(firstFieldAndSep)) == $1 "\t") ? "\t" : " ")
+	} else {
+	    print "Note: Using space as default output field separator; change via -s|--output-separator OS or pass a non-regular expression -F|--field-separator FS." > "/dev/stderr"
+	}
     }
 }
 {

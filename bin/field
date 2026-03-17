@@ -7,18 +7,18 @@ printUsage()
 {
     cat <<HELPTEXT
 Print selected field(s) N (-N counted from behind, N... including all following,
--N... including all preceding) from stdin, separated by SEP (or the passed
-OUTPUT-SEPARATOR, or the original FS).
+-N... including all preceding) from stdin, separated by SEP (or the passed OS,
+or the original FS).
 HELPTEXT
     echo
-    printf 'Usage: cat FILE [...] | %q %s\n' "$(basename "$1")" '[-F|--field-separator FS] [-s|--output-separator OUTPUT-SEPARATOR] [-u|--unbuffered] [-]N[...]|SEP [...]'
+    printf 'Usage: cat FILE [...] | %q %s\n' "$(basename "$1")" '[-F|--field-separator FS] [-s|--output-separator OS] [-u|--unbuffered] [-]N[...]|SEP [...]'
     printf 'Usage: %q %s\n' "$(basename "$1")" "... -i|--input FILE [-i ...]|--input-files FILE [...] ${FIELD_INPUTFILES_END} [-]N[...]|SEP [...] [-?|-h|--help]"
     echo
     cat <<HELPTEXT
 Print everything but passed field(s) N (-N counted from behind) from stdin.
 HELPTEXT
     echo
-    printf 'Usage: cat FILE [...] | %q %s\n' "$(basename "$1")" '[-F|--field-separator FS] [-s|--output-separator OUTPUT-SEPARATOR] [-u|--unbuffered] -v|--remove [-]N [...]'
+    printf 'Usage: cat FILE [...] | %q %s\n' "$(basename "$1")" '[-F|--field-separator FS] [-s|--output-separator OS] [-u|--unbuffered] -v|--remove [-]N [...]'
     printf 'Usage: %q %s\n' "$(basename "$1")" "... -i|--input FILE [-i ...]|--input-files FILE [...] ${FIELD_INPUTFILES_END} -v|--remove [-]N [...] [-?|-h|--help]"
 }
 fieldNumberError()
@@ -73,17 +73,17 @@ done
 
 outputSeparatorDetermination='
 NR == 1 {
-    # Use passed OUTPUT-SEPARATOR, fall back to FS unless it is a regular expression.
+    # Use passed OS, fall back to FS unless it is a regular expression.
     if (outputSeparator != "") {
 	OFS = outputSeparator
     } else {
-	firstTwoFields = $1 FS $2
-	if (NF < 2 || substr($0, 1, length(firstTwoFields)) == firstTwoFields) {
+	firstFieldAndSep = $1 FS
+	if (NF == 0 || $0 == $1 || substr($0, 1, length(FS)) == FS || substr($0, 1, length(firstFieldAndSep)) == firstFieldAndSep) {
 	    OFS = FS
-	} else if (FS == " " && (substr($0, 1, length(firstTwoFields)) == $1 "\t" $2)) {
-	    OFS = "\t"
+	} else if (FS == " ") {
+	    OFS = (($0 ~ /^\t/ || substr($0, 1, length(firstFieldAndSep)) == $1 "\t") ? "\t" : " ")
 	} else {
-	    print "Note: Using space as default output field separator; change via -s|--output-separator OUTPUT-SEPARATOR or pass a non-regular expression -F|--field-separator FIELD-SEPARATOR." > "/dev/stderr"
+	    print "Note: Using space as default output field separator; change via -s|--output-separator OS or pass a non-regular expression -F|--field-separator FS." > "/dev/stderr"
 	}
     }
 }

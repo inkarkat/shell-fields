@@ -5,7 +5,7 @@ printShortUsage()
 {
     # Note: short followed by long option; if the user knows the short one, she can
     # skim the long one.
-    printf 'Usage: cat FILE [...] | %q %s\n' "$(basename "$1")" '[-F|--field-separator FS] [-v|--assign var=val [-v ...]] [-u|--unbuffered] [-s|--skip-value VAL] [-]N AWK-EXPR [...]'
+    printf 'Usage: cat FILE [...] | %q %s\n' "$(basename "$1")" '[-F|--field-separator FS] [-s|--output-separator OS] [-v|--assign var=val [-v ...]] [-u|--unbuffered] [-V|--skip-value VAL] [-]N AWK-EXPR [...]'
     echo
     printf 'Usage: %q %s\n' "$(basename "$1")" '... [-i[SUFFIX]|--in-place[=SUFFIX]] [-]N AWK-EXPR [...] [--] [FILE ...] [-?|-h|--help]'
 }
@@ -37,10 +37,13 @@ HELPDESCRIPTION
 			    used to duplicate the original field), or
 			    '\$1 "(" length(\$1) ")"')
     --field-separator|-F FS Use FS as the input field separator (as with AWK).
+    --output-separator|-s OS
+			    Use OS (instead of FS or the default space) to join
+			    the fields.
     --assign|-v var=val	    Assign the value val to the variable var; these can
 			    then be used in AWK-EXPR.
     --unbuffered|-u	    Immediately output each read line.
-    --skip-value|-s VAL	    Do not add the field when AWK-EXPR returns VAL.
+    --skip-value|-V VAL	    Do not add the field when AWK-EXPR returns VAL.
     --in-place[=SUFFIX]|-i[SUFFIX]
 			    Edit FILE(s) in place (makes backup if SUFFIX
 			    supplied).
@@ -59,6 +62,7 @@ HELPTEXT
 isBuffered=t
 typeset -a awkCall=(awk)
 typeset -a awkArgs=()
+outputSeparator=
 typeset -a awkVariableAssignments=()
 typeset -a fields=()
 typeset -a expressionCode=()
@@ -71,9 +75,10 @@ do
     case "$1" in
 	--help|-h|-\?)		shift; printLongUsage "$0"; exit 0;;
 	--field-separator|-F)	awkArgs+=("$1" "$2"); shift; shift;;
+	--output-separator|-s)	shift; outputSeparator="${1?}"; shift;;
 	--assign|-v)		awkVariableAssignments+=("$1" "${2?}"); shift; shift;;
 	--unbuffered|-u)	shift; isBuffered=;;
-	--skip-value|-s)	shift; skipValue="$1"; shift;;
+	--skip-value|-V)	shift; skipValue="$1"; shift;;
 	-i|--in-place)		isInPlace=t; shift;;
 	-i?*|--in-place=*)	isInPlace=t; inPlaceExtension="${1#-i}"; inPlaceExtension="${inPlaceExtension#--in-place=}"; shift;;
 	?([+-])+([0-9]))	fields+=("$1")
@@ -104,6 +109,7 @@ fi
 
 IFS=$'\n'
 exec "${awkCall[@]}" "${awkArgs[@]}" \
+    -v "outputSeparator=${outputSeparator//\\/\\\\}" \
     -v "isBuffered=$isBuffered" \
     -v "fieldList=${fields[*]//\\/\\\\}" \
     -v "hasSkipValue=${skipValue+t}" \
@@ -131,15 +137,18 @@ BEGIN {
     N = split(fieldList, fields, "\n")
 }
 NR == 1 {
-    # Use FS as output separator; it cannot be a regular expression here.
-    firstTwoFields = $1 FS $2
-    if (NF < 2 || substr($0, 1, length(firstTwoFields)) == firstTwoFields) {
-	OFS = FS
-    } else if (FS == " ") {
-	OFS = ((substr($0, 1, length(firstTwoFields)) == $1 "\t" $2) ? "\t" : " ")
+    # Use passed OS, fall back to FS unless it is a regular expression.
+    if (outputSeparator != "") {
+	OFS = outputSeparator
     } else {
-	print "ERROR: The field separator has to be a literal string; it cannot be a regular expression." > "/dev/stderr"
-	exit 2
+	firstFieldAndSep = $1 FS
+	if (NF == 0 || $0 == $1 || substr($0, 1, length(FS)) == FS || substr($0, 1, length(firstFieldAndSep)) == firstFieldAndSep) {
+	    OFS = FS
+	} else if (FS == " ") {
+	    OFS = (($0 ~ /^\t/ || substr($0, 1, length(firstFieldAndSep)) == $1 "\t") ? "\t" : " ")
+	} else {
+	    print "Note: Using space as default output field separator; change via -s|--output-separator OS or pass a non-regular expression -F|--field-separator FS." > "/dev/stderr"
+	}
     }
 }
 {
