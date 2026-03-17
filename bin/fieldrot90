@@ -35,8 +35,19 @@ END {
 	    rotatedLine = ""
 	    sep = ""
 	    for (j = 1; j <= NR; ++j) {
-		rotatedLine = rotatedLine (fieldNum[j] >= i ? sep line[j][i] : "")
+		rotatedLine = rotatedLine (fieldNum[j] >= i ? sep line[j][i] : sep)
 		sep = OFS
+
+		isOnlyEmptyFollow = 1
+		for (z = j + 1; z <= NR; ++z) {
+		    if (line[z][i] != "") {
+			isOnlyEmptyFollow = 0
+			break
+		    }
+		}
+		if (isOnlyEmptyFollow) {
+		    break
+		}
 	    }
 	    print rotatedLine
 	}
@@ -45,8 +56,19 @@ END {
 	    rotatedLine = ""
 	    sep = ""
 	    for (j = NR; j > 0; --j) {
-		rotatedLine = rotatedLine (fieldNum[j] >= i ? sep line[j][i] : "")
+		rotatedLine = rotatedLine (fieldNum[j] >= i ? sep line[j][i] : sep)
 		sep = OFS
+
+		isOnlyEmptyFollow = 1
+		for (z = j - 1; z > 0; --z) {
+		    if (line[z][i] != "") {
+			isOnlyEmptyFollow = 0
+			break
+		    }
+		}
+		if (isOnlyEmptyFollow) {
+		    break
+		}
 	    }
 	    print rotatedLine
 	}
