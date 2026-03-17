@@ -49,3 +49,15 @@ bzz			last		X
 eof		X
 EOF
 }
+
+@test "adding three new fields by emitting a value containing FS" {
+    run -0 fieldMap -F $'\t' +1 '"X\tY\tZ"' "${BATS_TEST_DIRNAME}/tabbed.txt"
+    assert_output - <<'EOF'
+foo	first	100	A Here	X	Y	Z
+bar	no4	201	X	Y	Z
+				X	Y	Z
+bzz			last	X	Y	Z
+X	Y	Z
+eof	X	Y	Z
+EOF
+}

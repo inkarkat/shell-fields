@@ -4,7 +4,7 @@ shopt -qs extglob
 printShortUsage()
 {
     local awkExpr='(AWK-EXPR | "[AWK-EXPR][+]|COMMAND")'
-    local awkFilterOrFieldAndExpr="-x|--filter $awkExpr | [+-]N $awkExpr"
+    local awkFilterOrFieldAndExpr="-x|--filter $awkExpr | [--reparse] [+-]N $awkExpr"
     # Note: short followed by long option; if the user knows the short one, she can
     # skim the long one.
     printf 'Usage: cat FILE [...] | %q %s\n' "$(basename "$1")" "[-F|--field-separator FS] [-s|--output-separator OS] [-v|--assign var=val [-v ...]] [-u|--unbuffered] [-E|--coprocess-error abort|ignore [--coprocess-error-value TEXT]|restart] [-f|--function 'FUNCTION-NAME(PARAMETER-LIST) { ... }' [-f ...]] ($awkFilterOrFieldAndExpr) [...]"
@@ -31,6 +31,17 @@ HELPDESCRIPTION
     printShortUsage "$1"
     echo
     cat <<HELPTEXT
+    --reparse		    Split the (partially) mapped line again into fields,
+			    and apply following expressions to the new field
+			    list. By default, +/-N addressing from behind refers
+			    to the original field count, and a field that has
+			    been split into multiple fields through mapping to a
+			    string containing FS is still considered one field;
+			    with --reparse, the field count is updated, and a
+			    mapped field that contains FS is split into multiple
+			    fields. Attention: This may cause already processed
+			    mappings of field N to be reapplied to the new field
+			    N!
     AWK-EXPR		    Any valid expression in AWK, for example 42,
 			    '"foo"', '++\$fieldNr' (fieldNr refers to N), or
 			    '\$1 "(" length(\$1) ")"')
@@ -155,6 +166,7 @@ do
 				esac
 				shift; shift
 				;;
+	--reparse)		shift; fields+=(REPARSE);;
 	--)			shift; break;;
 	-*)			{ echo "ERROR: Unknown option \"$1\"!"; echo; printUsage "$0"; } >&2; exit 2;;
 	*)			break;;
@@ -257,6 +269,13 @@ NR == 1 {
     delete fieldNrSequences
     originalNF = NF
     for (n = 1; n <= N; ++n) {
+	if (fields[n] == "REPARSE") {
+	    $0 = $0
+	    delete fieldNrSequences
+	    originalNF = NF
+	    continue
+	}
+
 	fieldNr = getFieldNr(fields[n], originalNF)
 	if (fieldNr >= 1) {
 	    $fieldNr = evaluateExpression(fieldNr, ++fieldNrSequences[fieldNr], originalNF)
