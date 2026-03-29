@@ -129,7 +129,6 @@ else
 	selectors+=" precedingFieldsFromEnd($delayedPrecedingFieldNr, $separator)"
 	delayedPrecedingFieldNr=
     }
-    hasFieldNumber=
     isSubsequent=
     separator='OFS'
     selectors=
@@ -139,24 +138,20 @@ else
 	    +([0-9]))   handleDelayed
 			selectors+=" ${isSubsequent:+$separator }\$$arg"
 			separator='OFS'
-			hasFieldNumber=t
 			;;
 	    +([0-9])...)
 			handleDelayed
 			selectors+=" ${isSubsequent:+$separator }followingFields(${arg%...}, $separator)"
 			separator='OFS'
-			hasFieldNumber=t
 			;;
 	    -+([0-9]))  handleDelayed
 			selectors+=" ${isSubsequent:+$separator }fieldFromEnd(${arg#-})"
 			separator='OFS'
-			hasFieldNumber=t
 			;;
 	    -+([0-9])...)
 			handleDelayed
 			arg="${arg#-}"; arg="${arg%...}"
 			delayedPrecedingFieldNr=$arg
-			hasFieldNumber=t
 			;;
 	    *)		arg="${arg//\\/\\\\}"
 			arg="${arg//\"/\\\"}"
@@ -167,7 +162,7 @@ else
 	isSubsequent=t
     done
     handleDelayed
-    [ "$hasFieldNumber" ] || fieldNumberError
+    [ -n "$selectors" ] || fieldNumberError
 
     exec awk "${fsArgs[@]}" \
 	-v "outputSeparator=${outputSeparator//\\/\\\\}" \
