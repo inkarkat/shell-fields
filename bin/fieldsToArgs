@@ -12,7 +12,7 @@ printShortUsage()
 {
     # Note: short followed by long option; if the user knows the short one, she can
     # skim the long one.
-    printf 'Usage: cat FILE [...] | %q %s%s %s\n' "$(basename "$1")" '[-F|--field-separator FS] [-r|--run-if-empty] [--header-field N|--extract-header-field N]' "${hasProgressNotification:+ [--progress SINK]}" '[--with-header [--separate-errors] [--color=(always|auto|never)|--no-color]|--with-prompt $(runWithPrompt --get-short-usage 2>/dev/null)] [--between-command BETWEEN-COMMAND] -c|--command "COMMANDLINE" [...] | [--] SIMPLECOMMAND [...] [-?|-h|--help]'
+    printf 'Usage: cat FILE [...] | %q %s%s %s\n' "$(basename "$1")" '[-F|--field-separator FS] [-r|--run-if-empty] [--header-field N|--extract-header-field N]' "${hasProgressNotification:+ [--progress SINK]}" "[--with-header [--separate-errors] [--color=(always|auto|never)|--no-color]|--with-prompt $(runWithPrompt --get-short-usage 2>/dev/null)] [--between-command BETWEEN-COMMAND] -c|--command \"COMMANDLINE\" [...] | [--] SIMPLECOMMAND [...] [-?|-h|--help]"
 }
 printUsage()
 {
