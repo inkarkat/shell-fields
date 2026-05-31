@@ -3,7 +3,7 @@
 load fixture
 
 @test "defaulting multiple LISTs of first and second fields" {
-    run -0 fieldDefault --input "${BATS_TEST_DIRNAME}/tabbed.txt" -F $'\t' --value DEFAULT 1 2
+    run -0 fieldDefault --file "${BATS_TEST_DIRNAME}/tabbed.txt" -F $'\t' --value DEFAULT 1 2
     assert_output - <<'EOF'
 foo	first	100	A Here
 bar	no4	201
@@ -20,7 +20,7 @@ EOF
 }
 
 @test "defaulting multiple LISTs of first and second fields with different values" {
-    run -0 fieldDefault --input "${BATS_TEST_DIRNAME}/tabbed.txt" -F $'\t' --value ONE 1 --value TWO 2
+    run -0 fieldDefault --file "${BATS_TEST_DIRNAME}/tabbed.txt" -F $'\t' --value ONE 1 --value TWO 2
     assert_output - <<'EOF'
 foo	first	100	A Here
 bar	no4	201
@@ -37,7 +37,7 @@ EOF
 }
 
 @test "defaulting multiple LISTs of disjunct fields with different values is only defaulting the first field of a LIST" {
-    run -0 fieldDefault --input "${BATS_TEST_DIRNAME}/tabbed.txt" -F $'\t' --value A 1,3 --value B 2,4
+    run -0 fieldDefault --file "${BATS_TEST_DIRNAME}/tabbed.txt" -F $'\t' --value A 1,3 --value B 2,4
     assert_output - <<'EOF'
 foo	first	100	A Here
 bar	no4	201	B
@@ -54,7 +54,7 @@ EOF
 }
 
 @test "defaulting multiple single-element LISTs of disjunct fields can be used to default all fields" {
-    run -0 fieldDefault --input "${BATS_TEST_DIRNAME}/tabbed.txt" -F $'\t' --value A 1 3 --value B 2 4
+    run -0 fieldDefault --file "${BATS_TEST_DIRNAME}/tabbed.txt" -F $'\t' --value A 1 3 --value B 2 4
     assert_output - <<'EOF'
 foo	first	100	A Here
 bar	no4	201	B
@@ -71,7 +71,7 @@ EOF
 }
 
 @test "defaulting multiple LISTs of overlapping fields with different values gives precedence to previous values" {
-    run -0 fieldDefault --input "${BATS_TEST_DIRNAME}/tabbed.txt" -F $'\t' --value A 1-3 --value B 2,4
+    run -0 fieldDefault --file "${BATS_TEST_DIRNAME}/tabbed.txt" -F $'\t' --value A 1-3 --value B 2,4
     assert_output - <<'EOF'
 foo	first	100	A Here
 bar	no4	201	B

@@ -3,7 +3,7 @@
 load fixture
 
 @test "defaulting first field" {
-    run -0 fieldDefault --input "${BATS_TEST_DIRNAME}/tabbed.txt" -F $'\t' --value DEFAULT 1
+    run -0 fieldDefault --file "${BATS_TEST_DIRNAME}/tabbed.txt" -F $'\t' --value DEFAULT 1
     assert_output - <<'EOF'
 foo	first	100	A Here
 bar	no4	201
@@ -20,7 +20,7 @@ EOF
 }
 
 @test "defaulting second field" {
-    run -0 fieldDefault --input "${BATS_TEST_DIRNAME}/tabbed.txt" -F $'\t' --value DEFAULT 2
+    run -0 fieldDefault --file "${BATS_TEST_DIRNAME}/tabbed.txt" -F $'\t' --value DEFAULT 2
     assert_output - <<'EOF'
 foo	first	100	A Here
 bar	no4	201
@@ -37,7 +37,7 @@ EOF
 }
 
 @test "defaulting third field" {
-    run -0 fieldDefault --input "${BATS_TEST_DIRNAME}/tabbed.txt" -F $'\t' --value DEFAULT 3
+    run -0 fieldDefault --file "${BATS_TEST_DIRNAME}/tabbed.txt" -F $'\t' --value DEFAULT 3
     assert_output - <<'EOF'
 foo	first	100	A Here
 bar	no4	201
@@ -54,7 +54,7 @@ EOF
 }
 
 @test "defaulting fourth field" {
-    run -0 fieldDefault --input "${BATS_TEST_DIRNAME}/tabbed.txt" -F $'\t' --value DEFAULT 4
+    run -0 fieldDefault --file "${BATS_TEST_DIRNAME}/tabbed.txt" -F $'\t' --value DEFAULT 4
     assert_output - <<'EOF'
 foo	first	100	A Here
 bar	no4	201	DEFAULT
@@ -71,7 +71,7 @@ EOF
 }
 
 @test "defaulting non-existing fifth field" {
-    run -0 fieldDefault --input "${BATS_TEST_DIRNAME}/tabbed.txt" -F $'\t' --value DEFAULT 5
+    run -0 fieldDefault --file "${BATS_TEST_DIRNAME}/tabbed.txt" -F $'\t' --value DEFAULT 5
     assert_output - <<'EOF'
 foo	first	100	A Here
 bar	no4	201

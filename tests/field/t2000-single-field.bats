@@ -3,7 +3,7 @@
 load fixture
 
 @test "print the first field" {
-    run -0 field --input "${BATS_TEST_DIRNAME}/tabbed.txt" -F $'\t' 1
+    run -0 field --file "${BATS_TEST_DIRNAME}/tabbed.txt" -F $'\t' 1
     assert_output - <<'EOF'
 foo
 bar
@@ -12,7 +12,7 @@ EOF
 }
 
 @test "print the last field" {
-    run -0 field --input "${BATS_TEST_DIRNAME}/tabbed.txt" -F $'\t' -1
+    run -0 field --file "${BATS_TEST_DIRNAME}/tabbed.txt" -F $'\t' -1
     assert_output - <<'EOF'
 A Here
 B There
@@ -21,7 +21,7 @@ EOF
 }
 
 @test "print the second from last field" {
-    run -0 field --input "${BATS_TEST_DIRNAME}/tabbed.txt" -F $'\t' -2
+    run -0 field --file "${BATS_TEST_DIRNAME}/tabbed.txt" -F $'\t' -2
     assert_output - <<'EOF'
 100
 201

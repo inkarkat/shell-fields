@@ -3,7 +3,7 @@
 load fixture
 
 @test "defaulting a LIST of first, second fields" {
-    run -0 fieldDefault --input "${BATS_TEST_DIRNAME}/tabbed.txt" -F $'\t' --value DEFAULT 1,2
+    run -0 fieldDefault --file "${BATS_TEST_DIRNAME}/tabbed.txt" -F $'\t' --value DEFAULT 1,2
     assert_output - <<'EOF'
 foo	first	100	A Here
 bar	no4	201
@@ -20,7 +20,7 @@ EOF
 }
 
 @test "defaulting a LIST of first - second fields" {
-    run -0 fieldDefault --input "${BATS_TEST_DIRNAME}/tabbed.txt" -F $'\t' --value DEFAULT 1-2
+    run -0 fieldDefault --file "${BATS_TEST_DIRNAME}/tabbed.txt" -F $'\t' --value DEFAULT 1-2
     assert_output - <<'EOF'
 foo	first	100	A Here
 bar	no4	201
@@ -37,7 +37,7 @@ EOF
 }
 
 @test "defaulting a LIST of second, fourth field" {
-    run -0 fieldDefault --input "${BATS_TEST_DIRNAME}/tabbed.txt" -F $'\t' --value DEFAULT 2,4
+    run -0 fieldDefault --file "${BATS_TEST_DIRNAME}/tabbed.txt" -F $'\t' --value DEFAULT 2,4
     assert_output - <<'EOF'
 foo	first	100	A Here
 bar	no4	201	DEFAULT
@@ -54,7 +54,7 @@ EOF
 }
 
 @test "defaulting third, first field" {
-    run -0 fieldDefault --input "${BATS_TEST_DIRNAME}/tabbed.txt" -F $'\t' --value DEFAULT 3,1
+    run -0 fieldDefault --file "${BATS_TEST_DIRNAME}/tabbed.txt" -F $'\t' --value DEFAULT 3,1
     assert_output - <<'EOF'
 foo	first	100	A Here
 bar	no4	201
@@ -71,7 +71,7 @@ EOF
 }
 
 @test "defaulting second - fourth field" {
-    run -0 fieldDefault --input "${BATS_TEST_DIRNAME}/tabbed.txt" -F $'\t' --value DEFAULT 2-4
+    run -0 fieldDefault --file "${BATS_TEST_DIRNAME}/tabbed.txt" -F $'\t' --value DEFAULT 2-4
     assert_output - <<'EOF'
 foo	first	100	A Here
 bar	no4	201	DEFAULT

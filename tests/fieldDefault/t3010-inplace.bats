@@ -9,7 +9,7 @@ setup()
 }
 
 @test "grep the first field with fixed text in-place modifies the input file" {
-    run -0 fieldDefault --input "$FILE" --in-place -F $'\t' --value DEFAULT 1
+    run -0 fieldDefault --file "$FILE" --in-place -F $'\t' --value DEFAULT 1
     assert_output ''
     diff -y - --label expected "$FILE" <<'EOF'
 foo	first	100	A Here
@@ -28,7 +28,7 @@ EOF
 
 @test "grep the first field with fixed text in-place modifies the input file and writes a backup" {
     rm -f -- "${FILE}.bak"
-    run -0 fieldDefault --input "$FILE" --in-place=.bak -F $'\t' --value DEFAULT 1
+    run -0 fieldDefault --file "$FILE" --in-place=.bak -F $'\t' --value DEFAULT 1
     assert_output ''
     diff -y - --label expected "$FILE" <<'EOF'
 foo	first	100	A Here

@@ -1,7 +1,7 @@
 #!/bin/bash
 shopt -qs extglob
 
-: ${FIELD_INPUTFILES_END=;}
+: ${FIELD_FILES_END=;}
 
 printUsage()
 {
@@ -12,14 +12,14 @@ or the original FS).
 HELPTEXT
     echo
     printf 'Usage: cat FILE [...] | %q %s\n' "$(basename "$1")" '[-F|--field-separator FS] [-s|--output-separator OS] [-u|--unbuffered] [-]N[...]|SEP [...]'
-    printf 'Usage: %q %s\n' "$(basename "$1")" "... -i|--input FILE [-i ...]|--input-files FILE [...] ${FIELD_INPUTFILES_END} [-]N[...]|SEP [...] [-?|-h|--help]"
+    printf 'Usage: %q %s\n' "$(basename "$1")" "... -f|--file FILE [-i ...]|--files FILE [...] ${FIELD_FILES_END} [-]N[...]|SEP [...] [-?|-h|--help]"
     echo
     cat <<HELPTEXT
 Print everything but passed field(s) N (-N counted from behind) from stdin.
 HELPTEXT
     echo
     printf 'Usage: cat FILE [...] | %q %s\n' "$(basename "$1")" '[-F|--field-separator FS] [-s|--output-separator OS] [-u|--unbuffered] -v|--remove [-]N [...]'
-    printf 'Usage: %q %s\n' "$(basename "$1")" "... -i|--input FILE [-i ...]|--input-files FILE [...] ${FIELD_INPUTFILES_END} -v|--remove [-]N [...] [-?|-h|--help]"
+    printf 'Usage: %q %s\n' "$(basename "$1")" "... -f|--file FILE [-i ...]|--files FILE [...] ${FIELD_FILES_END} -v|--remove [-]N [...] [-?|-h|--help]"
 }
 fieldNumberError()
 {
@@ -32,26 +32,28 @@ fieldNumberError()
 isBuffered=t
 typeset -a fsArgs=()
 outputSeparator=
-typeset -a inputFilespecs=()
+typeset -a filespecs=()
 isRemoveFields=
 while [ $# -ne 0 ]
 do
     case "$1" in
 	--help|-h|-\?)	shift; printUsage "$0"; exit 0;;
-	--input|-i)	shift; inputFilespecs+=("${1:?}"); shift;;
-	--input-files)	shift
-			while [ $# -gt 0 -a "$1" != "$FIELD_INPUTFILES_END" ]
+	--file|-f)	shift; filespecs+=("${1:?}"); shift;;
+	--file=*)	filespecs+=("${1#--file=}"); shift;;
+	-f*)		filespecs+=("${1#-f}"); shift;;
+	--files)	shift
+			while [ $# -gt 0 -a "$1" != "$FIELD_FILES_END" ]
 			do
-			    inputFilespecs+=("$1")
+			    filespecs+=("$1")
 			    shift
 			done
 			if [ $# -eq 0 ]; then
-			    echo "ERROR: --input-files must be concluded with '${FIELD_INPUTFILES_END}'"; echo; printUsage "$0"
+			    echo "ERROR: --files must be concluded with '${FIELD_FILES_END}'"; echo; printUsage "$0"
 			    exit 2
 			fi >&2
 			shift
-			if [ ${#inputFilespecs[@]} -eq 0 ]; then
-			    echo 'ERROR: --input-files must be followed by at least one FILE.'; echo; printUsage "$0"
+			if [ ${#filespecs[@]} -eq 0 ]; then
+			    echo 'ERROR: --files must be followed by at least one FILE.'; echo; printUsage "$0"
 			    exit 2
 			fi >&2
 			;;
@@ -121,7 +123,7 @@ BEGIN {
     printf "%s", ORS
     if (! isBuffered) fflush()
 }
-' "${inputFilespecs[@]}"
+' "${filespecs[@]}"
 else
     handleDelayed()
     {
@@ -193,5 +195,5 @@ $outputSeparatorDetermination
 {
     print$selectors
     if (! isBuffered) fflush()
-}" "${inputFilespecs[@]}"
+}" "${filespecs[@]}"
 fi

@@ -3,12 +3,12 @@
 load fixture
 
 @test "field number 0 prints all fields" {
-    run -0 field --input "${BATS_TEST_DIRNAME}/tabbed.txt" -F $'\t' 0
+    run -0 field --file "${BATS_TEST_DIRNAME}/tabbed.txt" -F $'\t' 0
     assert_output "$(cat "${BATS_TEST_DIRNAME}/tabbed.txt")"
 }
 
 @test "too large positive field (by one) is treated as empty" {
-    run -0 field --input "${BATS_TEST_DIRNAME}/tabbed.txt" -F $'\t' 1 5 2
+    run -0 field --file "${BATS_TEST_DIRNAME}/tabbed.txt" -F $'\t' 1 5 2
     assert_output - <<'EOF'
 foo		first
 bar		second
@@ -17,7 +17,7 @@ EOF
 }
 
 @test "too large positive field (by many) is treated as empty" {
-    run -0 field --input "${BATS_TEST_DIRNAME}/tabbed.txt" -F $'\t' 1 10 2
+    run -0 field --file "${BATS_TEST_DIRNAME}/tabbed.txt" -F $'\t' 1 10 2
     assert_output - <<'EOF'
 foo		first
 bar		second
@@ -26,7 +26,7 @@ EOF
 }
 
 @test "too large negative field (by one) is treated as empty" {
-    run -0 field --input "${BATS_TEST_DIRNAME}/tabbed.txt" -F $'\t' 1 -5 2
+    run -0 field --file "${BATS_TEST_DIRNAME}/tabbed.txt" -F $'\t' 1 -5 2
     assert_output - <<'EOF'
 foo		first
 bar		second
@@ -35,7 +35,7 @@ EOF
 }
 
 @test "too large negative field (by many) is treated as empty" {
-    run -0 field --input "${BATS_TEST_DIRNAME}/tabbed.txt" -F $'\t' 1 -10 2
+    run -0 field --file "${BATS_TEST_DIRNAME}/tabbed.txt" -F $'\t' 1 -10 2
     assert_output - <<'EOF'
 foo		first
 bar		second
