@@ -51,7 +51,7 @@ addPatternFile()
 	grepPatternArgs+=("$1" "$tempFilespec")
 
 	tempfiles+=("$tempFilespec")
-	! ${DEBUG:+debugenabled --invert-match --} ${DEBUG:-:} || trap 'rm -f -- "${tempfiles[@]}" 2>/dev/null' EXIT
+	trap '${DEBUG:+debugcommand --} rm -f -- "${tempfiles[@]}" 2>/dev/null' EXIT
     else
 	grepPatternArgs+=("$1" "$2")
     fi
