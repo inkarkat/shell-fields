@@ -61,3 +61,15 @@ EOF
 5
 EOF
 }
+
+@test "logical or || is not treated as a coproc command" {
+    run -0 fieldMap -F $'\t' 2 'substr($1, 0, 1) == "b" || $3 ~ 0 ? "X" : "Y"' "${BATS_TEST_DIRNAME}/tabbed.txt"
+    assert_output - <<'EOF'
+foo	X	100	A Here
+bar	X	201
+	Y		
+bzz	X		last
+	Y
+eof	Y
+EOF
+}

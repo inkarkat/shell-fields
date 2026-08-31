@@ -110,7 +110,7 @@ parseExpression()
 {
     local defaultSourceExpr="${1?}"; shift
     awkExpr="${1:?}"; shift
-    if [[ "$awkExpr" =~ ^([^|]*[^|+]|[^|+]?)(\+?)\|(.*)$ ]]; then
+    if [[ "$awkExpr" =~ ^([^|]*[^|+]|[^|+]?)(\+?)\|([^|].*)$ ]]; then
 	coprocs+=("${BASH_REMATCH[3]}")
 	[ "${BASH_REMATCH[2]}" = '+' ] && coprocsWantingPty+=("${BASH_REMATCH[3]}")
 	awkSourceExpr="${BASH_REMATCH[1]:-$defaultSourceExpr}"
