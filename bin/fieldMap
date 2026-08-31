@@ -1,5 +1,6 @@
 #!/bin/bash
 shopt -qs extglob
+${DEBUG:+eval $(debugtrace -o $- -- "$@")}
 
 printShortUsage()
 {
@@ -182,8 +183,14 @@ if [ "$isInPlace" ]; then
     awkCall=(gawk -i inplace -v "INPLACE_SUFFIX=$inPlaceExtension" -v "inplace::suffix=$inPlaceExtension")
 fi
 
+${DEBUG:+debuglog --module functions "${awkFunctions[*]}"}
 IFS=$'\n'
-exec "${awkCall[@]}" "${awkArgs[@]}" \
+${DEBUG:+env
+DEBUGCOMMAND_IFS=newline
+debugcommand
+--module
+awk
+--} "${awkCall[@]}" "${awkArgs[@]}" \
     -v "outputSeparator=${outputSeparator//\\/\\\\}" \
     -v "isBuffered=$isBuffered" \
     -v "fieldList=${fields[*]//\\/\\\\}" \
