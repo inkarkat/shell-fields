@@ -102,7 +102,7 @@ exec fieldMap "${fieldMapArgs[@]}" --function 'filterField(fieldComparisons,    
     for (i = 1; i <= n; i++) {
 	comparison = fieldComparisons[fieldComparisonsSortedValues[i]]
 	value = fieldComparisonsSortedValues[i]
-	####D print "**** #" fieldNr " (" i "): " $getFieldNr(fieldNr, NF) " -" comparison " (" previousComparison ") " value > (ENVIRON["BATS_TEST_NAME"] ? "/dev/fd/3" : "/dev/stderr")
+	if (index("," ENVIRON["DEBUG"] ",", ",fieldFilterNumber,")) print "**** #" fieldNr " (" i "): " $getFieldNr(fieldNr, NF) " -" comparison " (" previousComparison ") " value > (ENVIRON["BATS_TEST_NAME"] ? "/dev/fd/3" : "/dev/stderr")
 	switch (comparison) {
 	    case "gt": {
 		isOpening = 1
@@ -144,13 +144,14 @@ exec fieldMap "${fieldMapArgs[@]}" --function 'filterField(fieldComparisons,    
 		exit(3)
 	    }
 	}
-	####D print "****" (isOpen ? " open  " : " closed") (isOpening ? " opening" : " closing") (isMatch ? "    match" : " no-match") (isCurrentMatch ? "     matching" : " not-matching") > (ENVIRON["BATS_TEST_NAME"] ? "/dev/fd/3" : "/dev/stderr")
+	if (index("," ENVIRON["DEBUG"] ",", ",fieldFilterNumber,")) print "****" (isOpen ? " open  " : " closed") (isOpening ? " opening" : " closing") (isMatch ? "    match" : " no-match") (isCurrentMatch ? "     matching" : " not-matching") > (ENVIRON["BATS_TEST_NAME"] ? "/dev/fd/3" : "/dev/stderr")
 	if (isOpen) {
 	    # The last comparison was an opening one; following comparisons also need to
 	    # match until we encounter a closing one.
 	    isMatch = isMatch && isCurrentMatch
 	} else if (i > 1 && isMatch) {
 	    # We had a match and are not open; accept the line.
+	    if (index("," ENVIRON["DEBUG"] ",", ",fieldFilterNumber,")) print "**** accepted" > (ENVIRON["BATS_TEST_NAME"] ? "/dev/fd/3" : "/dev/stderr")
 	    return 1
 	} else {
 	    isMatch = isMatch || isCurrentMatch
@@ -158,6 +159,8 @@ exec fieldMap "${fieldMapArgs[@]}" --function 'filterField(fieldComparisons,    
 	isOpen = isOpening
 	previousComparison = comparison
     }
+
+    if (index("," ENVIRON["DEBUG"] ",", ",fieldFilterNumber,")) print "****" (isMatch ? " accepted" : " declined") > (ENVIRON["BATS_TEST_NAME"] ? "/dev/fd/3" : "/dev/stderr")
     return isMatch
 }
 function fieldFilter(      isMatch) {
