@@ -52,13 +52,20 @@ HELPTEXT
 }
 
 typeset -a comparisons=()
+storeComparison()
+{
+    local fieldNum="${1:?}"; shift
+    local value="${1:?}"; shift
+    local comparison="${1:?}"; shift
+    comparisons+=("comparisons[${fieldNum}][${value}]=\"${comparison}\"")
+}
 addComparison()
 {
     local fieldNum="${1:?}"; shift
     case "$1" in
-	--greater|-g)	    comparisons+=("comparisons[$fieldNum][${2:?}]=\"gt\"");;
-	--smaller|-s)	    comparisons+=("comparisons[$fieldNum][${2:?}]=\"lt\"");;
-	-@([gl][et]|eq|ne)) comparisons+=("comparisons[$fieldNum][${2:?}]=\"${1#-}\"");;
+	--greater|-g)	    storeComparison "$fieldNum" "${2:?}" gt;;
+	--smaller|-s)	    storeComparison "$fieldNum" "${2:?}" lt;;
+	-@([gl][et]|eq|ne)) storeComparison "$fieldNum" "${2:?}" "${1#-}";;
 	*)		    { echo "ERROR: Unknown comparison operator \"$1\"!"; echo; printUsage "$0"; } >&2; exit 2;;
     esac; shift
 }
