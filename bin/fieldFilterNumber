@@ -89,19 +89,34 @@ if [ ${#comparisons[@]} -eq 0 ]; then
 fi >&2
 
 IFS=$'\n'
-exec fieldMap "${fieldMapArgs[@]}" --function 'filterField(fieldComparisons,      isMatch) {
+exec fieldMap "${fieldMapArgs[@]}" --function 'filterField(fieldComparisons,      isMatch, n, i, comparison, value, isCurrentMatch, isOpen, isOpening) {
     isMatch = 0
-    for (value in fieldComparisons) {
-	comparison = fieldComparisons[value]
+    n = asorti(fieldComparisons, fieldComparisonsSortedValues, "@ind_num_asc")
+    for (i = 1; i <= n; i++) {
+	comparison = fieldComparisons[fieldComparisonsSortedValues[i]]
+	value = fieldComparisonsSortedValues[i]
 	switch (comparison) {
-	    case "gt": { isMatch = isMatch || ($getFieldNr(fieldNr, NF) > value); break; }
-	    case "ge": { isMatch = isMatch || ($getFieldNr(fieldNr, NF) >= value); break; }
-	    case "lt": { isMatch = isMatch || ($getFieldNr(fieldNr, NF) < value); break; }
-	    case "le": { isMatch = isMatch || ($getFieldNr(fieldNr, NF) <= value); break; }
-	    case "eq": { isMatch = isMatch || ($getFieldNr(fieldNr, NF) == value); break; }
-	    case "ne": { isMatch = isMatch || ($getFieldNr(fieldNr, NF) != value); break; }
+	    case "gt": { isCurrentMatch = ($getFieldNr(fieldNr, NF) > value); isOpening = 1; break; }
+	    case "ge": { isCurrentMatch = ($getFieldNr(fieldNr, NF) >= value); isOpening = 1; break; }
+	    case "ne": { isCurrentMatch = ($getFieldNr(fieldNr, NF) != value); isOpening = 1; break; }
+
+	    case "lt": { isCurrentMatch = ($getFieldNr(fieldNr, NF) < value); isOpening = 0; break; }
+	    case "le": { isCurrentMatch = ($getFieldNr(fieldNr, NF) <= value); isOpening = 0; break; }
+	    case "eq": { isCurrentMatch = ($getFieldNr(fieldNr, NF) == value); isOpening = 0; break; }
 	    default:   { exit(3); }
 	}
+	####D print "**** #" fieldNr " (" i "): " $getFieldNr(fieldNr, NF) " -" comparison " " value ":" (isOpen ? " open  " : " closed") (isOpening ? " opening" : " closing") (isMatch ? "    match" : " no-match") (isCurrentMatch ? "     matching" : " not-matching") > (ENVIRON["BATS_TEST_NAME"] ? "/dev/fd/3" : "/dev/stderr")
+	if (isOpen) {
+	    # The last comparison was an opening one; following comparisons also need to
+	    # match until we encounter a closing one.
+	    isMatch = isMatch && isCurrentMatch
+	} else if (i > 1 && isMatch) {
+	    # We had a match and are not open; accept the line.
+	    return 1
+	} else {
+	    isMatch = isMatch || isCurrentMatch
+	}
+	isOpen = isOpening
     }
     return isMatch
 }
