@@ -32,7 +32,9 @@ HELPDESCRIPTION
     --unbuffered|-u	Immediately output each read line.
     [-]N -g|--greater|-s|--smaller|-lt|-le|-eq|-ne|-ge|-gt NUM
 			Only print those lines where the numeric value in field
-			N (-N counted from behind) compares to NUM.
+			N (-N counted from behind) compares to NUM. A single
+			successful comparison is enough to print a line (i.e. it
+			works like grep).
 
 SEE ALSO:
 - fieldMap is the generic underlying engine that can both filter and transform
@@ -49,17 +51,17 @@ HELPTEXT
     printf 'ls -l / | %q %s\n' "$(basename "$1")" '2 -gt 1'
 }
 
-typeset -a comparisonFilter=()
+comparisons=
 addComparison()
 {
     local fieldNum="${1:?}"; shift
     case "$1" in
-	--greater|-g|-gt)   comparisonFilter+=(--filter "\$getFieldNr(${fieldNum}, NF) > $2");;
-	-ge)		    comparisonFilter+=(--filter "\$getFieldNr(${fieldNum}, NF) >= $2");;
-	--smaller|-s|-lt)   comparisonFilter+=(--filter "\$getFieldNr(${fieldNum}, NF) < $2");;
-	-le)		    comparisonFilter+=(--filter "\$getFieldNr(${fieldNum}, NF) <= $2");;
-	-eq)		    comparisonFilter+=(--filter "\$getFieldNr(${fieldNum}, NF) == $2");;
-	-ne)		    comparisonFilter+=(--filter "\$getFieldNr(${fieldNum}, NF) != $2");;
+	--greater|-g|-gt)   comparisons+="${comparisons:+ || }(\$getFieldNr(${fieldNum}, NF) > $2)";;
+	-ge)		    comparisons+="${comparisons:+ || }(\$getFieldNr(${fieldNum}, NF) >= $2)";;
+	--smaller|-s|-lt)   comparisons+="${comparisons:+ || }(\$getFieldNr(${fieldNum}, NF) < $2)";;
+	-le)		    comparisons+="${comparisons:+ || }(\$getFieldNr(${fieldNum}, NF) <= $2)";;
+	-eq)		    comparisons+="${comparisons:+ || }(\$getFieldNr(${fieldNum}, NF) == $2)";;
+	-ne)		    comparisons+="${comparisons:+ || }(\$getFieldNr(${fieldNum}, NF) != $2)";;
 	*)		    { echo "ERROR: Unknown comparison operator \"$1\"!"; echo; printUsage "$0"; } >&2; exit 2;;
     esac; shift
 }
@@ -82,11 +84,11 @@ do
 	*)		break;;
     esac
 done
-if [ ${#comparisonFilter[@]} -eq 0 ]; then
+if [ -z "$comparisons" ]; then
     echo 'ERROR: No comparison(s) passed.'
     echo
     printUsage "$0"
     exit 2
 fi >&2
 
-exec fieldMap "${fieldMapArgs[@]}" "${comparisonFilter[@]}" "$@"
+exec fieldMap "${fieldMapArgs[@]}" --filter "$comparisons" "$@"
