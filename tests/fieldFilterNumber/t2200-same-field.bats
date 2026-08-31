@@ -13,7 +13,6 @@ EOF
 }
 
 @test "two outside ranges comparisons are combined into one range" {
-    skip
     expected="$(cat <<'EOF'
 foo	1337	3	-4321	1.11
 bar	4711	1	5849	5.12
@@ -64,7 +63,6 @@ EOF
 }
 
 @test "additional superfluous comparisions do not change result" {
-    skip
     run -0 fieldFilterNumber -F $'\t' 2 -gt 2000 2 -gt 3500 2 -lt 4000 2 -lt 5000 "${BATS_TEST_DIRNAME}/tabbed.txt"
 	assert_output - <<'EOF'
 quux	3333	4	-1001	1.11

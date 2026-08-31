@@ -89,23 +89,55 @@ if [ ${#comparisons[@]} -eq 0 ]; then
 fi >&2
 
 IFS=$'\n'
-exec fieldMap "${fieldMapArgs[@]}" --function 'filterField(fieldComparisons,      isMatch, n, i, comparison, value, isCurrentMatch, isOpen, isOpening) {
+exec fieldMap "${fieldMapArgs[@]}" --function 'filterField(fieldComparisons,      isMatch, n, i, previousComparison, comparison, value, isCurrentMatch, isOpen, isOpening) {
     isMatch = 0
     n = asorti(fieldComparisons, fieldComparisonsSortedValues, "@ind_num_asc")
     for (i = 1; i <= n; i++) {
 	comparison = fieldComparisons[fieldComparisonsSortedValues[i]]
 	value = fieldComparisonsSortedValues[i]
+	####D print "**** #" fieldNr " (" i "): " $getFieldNr(fieldNr, NF) " -" comparison " (" previousComparison ") " value > (ENVIRON["BATS_TEST_NAME"] ? "/dev/fd/3" : "/dev/stderr")
 	switch (comparison) {
-	    case "gt": { isCurrentMatch = ($getFieldNr(fieldNr, NF) > value); isOpening = 1; break; }
-	    case "ge": { isCurrentMatch = ($getFieldNr(fieldNr, NF) >= value); isOpening = 1; break; }
-	    case "ne": { isCurrentMatch = ($getFieldNr(fieldNr, NF) != value); isOpening = 1; break; }
+	    case "gt": {
+		isOpening = 1
+		if (previousComparison == "gt" || previousComparison == "ge") continue # Already compared against a smaller value.
+		isCurrentMatch = ($getFieldNr(fieldNr, NF) > value)
+		break
+	    }
+	    case "ge": {
+		isOpening = 1
+		if (previousComparison == "gt" || previousComparison == "ge") continue # Already compared against a smaller value.
+		isCurrentMatch = ($getFieldNr(fieldNr, NF) >= value)
+		break
+	    }
+	    case "ne": {
+		isOpening = 1
+		isCurrentMatch = ($getFieldNr(fieldNr, NF) != value)
+		break
+	    }
 
-	    case "lt": { isCurrentMatch = ($getFieldNr(fieldNr, NF) < value); isOpening = 0; break; }
-	    case "le": { isCurrentMatch = ($getFieldNr(fieldNr, NF) <= value); isOpening = 0; break; }
-	    case "eq": { isCurrentMatch = ($getFieldNr(fieldNr, NF) == value); isOpening = 0; break; }
-	    default:   { exit(3); }
+	    case "lt": {
+		isOpening = 0
+		if (previousComparison == "lt" || previousComparison == "le") continue # Already compared against a smaller value.
+		isCurrentMatch = ($getFieldNr(fieldNr, NF) < value)
+		break
+	    }
+	    case "le": {
+		isOpening = 0
+		if (previousComparison == "lt" || previousComparison == "le") continue # Already compared against a smaller value.
+		isCurrentMatch = ($getFieldNr(fieldNr, NF) <= value)
+		break
+	    }
+	    case "eq": {
+		isOpening = 0
+		isCurrentMatch = ($getFieldNr(fieldNr, NF) == value)
+		break
+	    }
+
+	    default: {
+		exit(3)
+	    }
 	}
-	####D print "**** #" fieldNr " (" i "): " $getFieldNr(fieldNr, NF) " -" comparison " " value ":" (isOpen ? " open  " : " closed") (isOpening ? " opening" : " closing") (isMatch ? "    match" : " no-match") (isCurrentMatch ? "     matching" : " not-matching") > (ENVIRON["BATS_TEST_NAME"] ? "/dev/fd/3" : "/dev/stderr")
+	####D print "****" (isOpen ? " open  " : " closed") (isOpening ? " opening" : " closing") (isMatch ? "    match" : " no-match") (isCurrentMatch ? "     matching" : " not-matching") > (ENVIRON["BATS_TEST_NAME"] ? "/dev/fd/3" : "/dev/stderr")
 	if (isOpen) {
 	    # The last comparison was an opening one; following comparisons also need to
 	    # match until we encounter a closing one.
@@ -117,6 +149,7 @@ exec fieldMap "${fieldMapArgs[@]}" --function 'filterField(fieldComparisons,    
 	    isMatch = isMatch || isCurrentMatch
 	}
 	isOpen = isOpening
+	previousComparison = comparison
     }
     return isMatch
 }
