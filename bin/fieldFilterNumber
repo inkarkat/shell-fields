@@ -51,17 +51,14 @@ HELPTEXT
     printf 'ls -l / | %q %s\n' "$(basename "$1")" '2 -gt 1'
 }
 
-comparisons=
+typeset -a comparisons=()
 addComparison()
 {
     local fieldNum="${1:?}"; shift
     case "$1" in
-	--greater|-g|-gt)   comparisons+="${comparisons:+ || }(\$getFieldNr(${fieldNum}, NF) > $2)";;
-	-ge)		    comparisons+="${comparisons:+ || }(\$getFieldNr(${fieldNum}, NF) >= $2)";;
-	--smaller|-s|-lt)   comparisons+="${comparisons:+ || }(\$getFieldNr(${fieldNum}, NF) < $2)";;
-	-le)		    comparisons+="${comparisons:+ || }(\$getFieldNr(${fieldNum}, NF) <= $2)";;
-	-eq)		    comparisons+="${comparisons:+ || }(\$getFieldNr(${fieldNum}, NF) == $2)";;
-	-ne)		    comparisons+="${comparisons:+ || }(\$getFieldNr(${fieldNum}, NF) != $2)";;
+	--greater|-g)	    comparisons+=("comparisons[$fieldNum][${2:?}]=\"gt\"");;
+	--smaller|-s)	    comparisons+=("comparisons[$fieldNum][${2:?}]=\"lt\"");;
+	-@([gl][et]|eq|ne)) comparisons+=("comparisons[$fieldNum][${2:?}]=\"${1#-}\"");;
 	*)		    { echo "ERROR: Unknown comparison operator \"$1\"!"; echo; printUsage "$0"; } >&2; exit 2;;
     esac; shift
 }
@@ -84,11 +81,39 @@ do
 	*)		break;;
     esac
 done
-if [ -z "$comparisons" ]; then
+if [ ${#comparisons[@]} -eq 0 ]; then
     echo 'ERROR: No comparison(s) passed.'
     echo
     printUsage "$0"
     exit 2
 fi >&2
 
-exec fieldMap "${fieldMapArgs[@]}" --filter "$comparisons" "$@"
+IFS=$'\n'
+exec fieldMap "${fieldMapArgs[@]}" --function 'filterField(fieldComparisons,      isMatch) {
+    isMatch = 0
+    for (value in fieldComparisons) {
+	comparison = fieldComparisons[value]
+	switch (comparison) {
+	    case "gt": { isMatch = isMatch || ($getFieldNr(fieldNr, NF) > value); break; }
+	    case "ge": { isMatch = isMatch || ($getFieldNr(fieldNr, NF) >= value); break; }
+	    case "lt": { isMatch = isMatch || ($getFieldNr(fieldNr, NF) < value); break; }
+	    case "le": { isMatch = isMatch || ($getFieldNr(fieldNr, NF) <= value); break; }
+	    case "eq": { isMatch = isMatch || ($getFieldNr(fieldNr, NF) == value); break; }
+	    case "ne": { isMatch = isMatch || ($getFieldNr(fieldNr, NF) != value); break; }
+	    default:   { exit(3); }
+	}
+    }
+    return isMatch
+}
+function fieldFilter(      isMatch) {
+    isMatch = 0
+    for (fieldNr in comparisons) {
+	isMatch = isMatch || filterField(comparisons[fieldNr])
+    }
+    return isMatch
+}
+BEGIN {
+'"${comparisons[*]}"'
+}
+' \
+    --filter 'fieldFilter()' "$@"
