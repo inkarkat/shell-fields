@@ -99,9 +99,25 @@ IFS=$'\n'
 exec fieldMap "${fieldMapArgs[@]}" --function 'filterField(fieldComparisons,      isMatch, n, i, previousComparison, comparison, value, isCurrentMatch, isOpen, isOpening) {
     isMatch = 0
     n = asorti(fieldComparisons, fieldComparisonsSortedValues, "@ind_num_asc")
+
+    # Check for equality first; if we have a match, we can directly accept the line.
+    # But more importantly, in the second loop, the intermingling of -eq and -ne would disrupt the opening/closing logic.
     for (i = 1; i <= n; i++) {
 	comparison = fieldComparisons[fieldComparisonsSortedValues[i]]
 	value = fieldComparisonsSortedValues[i]
+	if (comparison == "eq") {
+	    isCurrentMatch = ($getFieldNr(fieldNr, NF) == value)
+	    if (index("," ENVIRON["DEBUG"] ",", ",fieldFilterNumber,")) print "**** #" fieldNr " (" i "): " $getFieldNr(fieldNr, NF) " -" comparison " (" previousComparison ") " value > (ENVIRON["BATS_TEST_NAME"] ? "/dev/fd/3" : "/dev/stderr")
+	    if (index("," ENVIRON["DEBUG"] ",", ",fieldFilterNumber,")) print "****" (isCurrentMatch ? " accepted" : " not-matching") > (ENVIRON["BATS_TEST_NAME"] ? "/dev/fd/3" : "/dev/stderr")
+	    if (isCurrentMatch) return 1
+	}
+    }
+
+    for (i = 1; i <= n; i++) {
+	comparison = fieldComparisons[fieldComparisonsSortedValues[i]]
+	value = fieldComparisonsSortedValues[i]
+	if (comparison == "eq") continue    # Already handled in the first loop above.
+
 	if (index("," ENVIRON["DEBUG"] ",", ",fieldFilterNumber,")) print "**** #" fieldNr " (" i "): " $getFieldNr(fieldNr, NF) " -" comparison " (" previousComparison ") " value > (ENVIRON["BATS_TEST_NAME"] ? "/dev/fd/3" : "/dev/stderr")
 	switch (comparison) {
 	    case "gt": {
@@ -132,11 +148,6 @@ exec fieldMap "${fieldMapArgs[@]}" --function 'filterField(fieldComparisons,    
 		isOpening = 0
 		if (previousComparison == "lt" || previousComparison == "le") continue # Already compared against a smaller value.
 		isCurrentMatch = ($getFieldNr(fieldNr, NF) <= value)
-		break
-	    }
-	    case "eq": {
-		isOpening = 0
-		isCurrentMatch = ($getFieldNr(fieldNr, NF) == value)
 		break
 	    }
 

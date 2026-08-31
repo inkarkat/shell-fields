@@ -62,6 +62,16 @@ eof		0		-7.777
 EOF
 }
 
+@test "non-equal comparisons win over equal comparisons" {
+    run -0 fieldFilterNumber -F $'\t' 2 -ne 1111 2 -eq 1337 2 -eq 3333 2 -ne 4444 2 -eq 4711 2 -ne 9999 "${BATS_TEST_DIRNAME}/tabbed.txt"
+    assert_output - <<'EOF'
+foo	1337	3	-4321	1.11
+bar	4711	1	5849	5.12
+quux	3333	4	-1001	1.11
+eof		0		-7.777
+EOF
+}
+
 @test "additional superfluous comparisions do not change result" {
     local expected='quux	3333	4	-1001	1.11'
     run -0 fieldFilterNumber -F $'\t' 2 -gt 2000 2 -gt 3500 2 -lt 4000 2 -lt 5000 "${BATS_TEST_DIRNAME}/tabbed.txt"
