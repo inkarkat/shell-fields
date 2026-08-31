@@ -57,7 +57,7 @@ storeComparison()
     local fieldNum="${1:?}"; shift
     local value="${1:?}"; shift
     local comparison="${1:?}"; shift
-    comparisons+=("comparisons[${fieldNum}][${value}]=\"${comparison}\"")
+    comparisons+=("if (comparisons[${fieldNum}][${value}] == \"\") { comparisons[${fieldNum}][${value}]=\"${comparison}\"; } else { printf(\"ERROR: Value %d already given in -%s comparison for field %d.\\n\", $value, comparisons[${fieldNum}][${value}], $fieldNum) > \"/dev/stderr\"; exit 2; }")
 }
 addComparison()
 {
