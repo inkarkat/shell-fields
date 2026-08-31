@@ -51,17 +51,21 @@ HELPTEXT
     printf 'ls -l / | %q %s\n' "$(basename "$1")" '2 -gt 1'
 }
 
-comparisons=
+typeset -a comparisons=()
+storeComparison()
+{
+    local fieldNum="${1:?}"; shift
+    local value="${1:?}"; shift
+    local comparison="${1:?}"; shift
+    comparisons+=("if (comparisons[${fieldNum}][${value}] == \"\") { comparisons[${fieldNum}][${value}]=\"${comparison}\"; } else { printf(\"ERROR: Value %d already given in -%s comparison for field %d.\\n\", $value, comparisons[${fieldNum}][${value}], $fieldNum) > \"/dev/stderr\"; exit 2; }")
+}
 addComparison()
 {
     local fieldNum="${1:?}"; shift
     case "$1" in
-	--greater|-g|-gt)   comparisons+="${comparisons:+ || }(\$getFieldNr(${fieldNum}, NF) > $2)";;
-	-ge)		    comparisons+="${comparisons:+ || }(\$getFieldNr(${fieldNum}, NF) >= $2)";;
-	--smaller|-s|-lt)   comparisons+="${comparisons:+ || }(\$getFieldNr(${fieldNum}, NF) < $2)";;
-	-le)		    comparisons+="${comparisons:+ || }(\$getFieldNr(${fieldNum}, NF) <= $2)";;
-	-eq)		    comparisons+="${comparisons:+ || }(\$getFieldNr(${fieldNum}, NF) == $2)";;
-	-ne)		    comparisons+="${comparisons:+ || }(\$getFieldNr(${fieldNum}, NF) != $2)";;
+	--greater|-g)	    storeComparison "$fieldNum" "${2:?}" gt;;
+	--smaller|-s)	    storeComparison "$fieldNum" "${2:?}" lt;;
+	-@([gl][et]|eq|ne)) storeComparison "$fieldNum" "${2:?}" "${1#-}";;
 	*)		    { echo "ERROR: Unknown comparison operator \"$1\"!"; echo; printUsage "$0"; } >&2; exit 2;;
     esac; shift
 }
@@ -84,11 +88,101 @@ do
 	*)		break;;
     esac
 done
-if [ -z "$comparisons" ]; then
+if [ ${#comparisons[@]} -eq 0 ]; then
     echo 'ERROR: No comparison(s) passed.'
     echo
     printUsage "$0"
     exit 2
 fi >&2
 
-exec fieldMap "${fieldMapArgs[@]}" --filter "$comparisons" "$@"
+IFS=$'\n'
+exec fieldMap "${fieldMapArgs[@]}" --function 'filterField(fieldComparisons,      isMatch, n, i, previousComparison, comparison, value, isCurrentMatch, isOpen, isOpening) {
+    isMatch = 0
+    n = asorti(fieldComparisons, fieldComparisonsSortedValues, "@ind_num_asc")
+
+    # Check for equality first; if we have a match, we can directly accept the line.
+    # But more importantly, in the second loop, the intermingling of -eq and -ne would disrupt the opening/closing logic.
+    for (i = 1; i <= n; i++) {
+	comparison = fieldComparisons[fieldComparisonsSortedValues[i]]
+	value = fieldComparisonsSortedValues[i]
+	if (comparison == "eq") {
+	    isCurrentMatch = ($getFieldNr(fieldNr, NF) == value)
+	    if (index("," ENVIRON["DEBUG"] ",", ",fieldFilterNumber,")) print "**** #" fieldNr " (" i "): " $getFieldNr(fieldNr, NF) " -" comparison " (" previousComparison ") " value > (ENVIRON["BATS_TEST_NAME"] ? "/dev/fd/3" : "/dev/stderr")
+	    if (index("," ENVIRON["DEBUG"] ",", ",fieldFilterNumber,")) print "****" (isCurrentMatch ? " accepted" : " not-matching") > (ENVIRON["BATS_TEST_NAME"] ? "/dev/fd/3" : "/dev/stderr")
+	    if (isCurrentMatch) return 1
+	}
+    }
+
+    for (i = 1; i <= n; i++) {
+	comparison = fieldComparisons[fieldComparisonsSortedValues[i]]
+	value = fieldComparisonsSortedValues[i]
+	if (comparison == "eq") continue    # Already handled in the first loop above.
+
+	if (index("," ENVIRON["DEBUG"] ",", ",fieldFilterNumber,")) print "**** #" fieldNr " (" i "): " $getFieldNr(fieldNr, NF) " -" comparison " (" previousComparison ") " value > (ENVIRON["BATS_TEST_NAME"] ? "/dev/fd/3" : "/dev/stderr")
+	switch (comparison) {
+	    case "gt": {
+		isOpening = 1
+		if (previousComparison == "gt" || previousComparison == "ge") continue # Already compared against a smaller value.
+		isCurrentMatch = ($getFieldNr(fieldNr, NF) > value)
+		break
+	    }
+	    case "ge": {
+		isOpening = 1
+		if (previousComparison == "gt" || previousComparison == "ge") continue # Already compared against a smaller value.
+		isCurrentMatch = ($getFieldNr(fieldNr, NF) >= value)
+		break
+	    }
+	    case "ne": {
+		isOpening = 1
+		isCurrentMatch = ($getFieldNr(fieldNr, NF) != value)
+		break
+	    }
+
+	    case "lt": {
+		isOpening = 0
+		if (previousComparison == "lt" || previousComparison == "le") continue # Already compared against a smaller value.
+		isCurrentMatch = ($getFieldNr(fieldNr, NF) < value)
+		break
+	    }
+	    case "le": {
+		isOpening = 0
+		if (previousComparison == "lt" || previousComparison == "le") continue # Already compared against a smaller value.
+		isCurrentMatch = ($getFieldNr(fieldNr, NF) <= value)
+		break
+	    }
+
+	    default: {
+		exit(3)
+	    }
+	}
+	if (index("," ENVIRON["DEBUG"] ",", ",fieldFilterNumber,")) print "****" (isOpen ? " open  " : " closed") (isOpening ? " opening" : " closing") (isMatch ? "    match" : " no-match") (isCurrentMatch ? "     matching" : " not-matching") > (ENVIRON["BATS_TEST_NAME"] ? "/dev/fd/3" : "/dev/stderr")
+	if (isOpen) {
+	    # The last comparison was an opening one; following comparisons also need to
+	    # match until we encounter a closing one.
+	    isMatch = isMatch && isCurrentMatch
+	} else if (i > 1 && isMatch) {
+	    # We had a match and are not open; accept the line.
+	    if (index("," ENVIRON["DEBUG"] ",", ",fieldFilterNumber,")) print "**** accepted" > (ENVIRON["BATS_TEST_NAME"] ? "/dev/fd/3" : "/dev/stderr")
+	    return 1
+	} else {
+	    isMatch = isMatch || isCurrentMatch
+	}
+	isOpen = isOpening
+	previousComparison = comparison
+    }
+
+    if (index("," ENVIRON["DEBUG"] ",", ",fieldFilterNumber,")) print "****" (isMatch ? " accepted" : " declined") > (ENVIRON["BATS_TEST_NAME"] ? "/dev/fd/3" : "/dev/stderr")
+    return isMatch
+}
+function fieldFilter(      isMatch) {
+    isMatch = 0
+    for (fieldNr in comparisons) {
+	isMatch = isMatch || filterField(comparisons[fieldNr])
+    }
+    return isMatch
+}
+BEGIN {
+'"${comparisons[*]}"'
+}
+' \
+    --filter 'fieldFilter()' "$@"
