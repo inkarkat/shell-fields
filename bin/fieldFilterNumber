@@ -1,0 +1,210 @@
+#!/bin/bash
+shopt -qs extglob
+
+printShortUsage()
+{
+    # Note: short followed by long option; if the user knows the short one, they can
+    # skim the long one.
+    local awkCompareExpr='[-]N -g|--greater|-s|--smaller|-lt|-le|-eq|-ne|-ge|-gt NUM ...'
+    printf 'Usage: cat FILE [...] | %q %s\n' "$(basename "$1")" "[-F|--field-separator FS] [-u|--unbuffered] [--non-numeric zero|keep|drop] ($awkCompareExpr) [...]"
+    printf 'Usage: %q %s\n' "$(basename "$1")" "... [-i[SUFFIX]|--in-place[=SUFFIX]] ($awkCompareExpr) [...] [--] [FILE ...] [-?|-h|--help]"
+}
+printUsage()
+{
+    # This is the short help when launched with no or incorrect arguments.
+    # It is printed to stderr to avoid accidental processing.
+    printShortUsage "$1" >&2
+    printf >&2 '\nTry %q --help for more information.\n' "$(basename "$1")"
+}
+printLongUsage()
+{
+    # This is the long "man page" when launched with the help argument.
+    # It is printed to stdout to allow paging with 'more'.
+    cat <<HELPDESCRIPTION
+Filter lines based on numeric comparison(s) of field(s).
+HELPDESCRIPTION
+    echo
+    printShortUsage "$1"
+    echo
+    cat <<HELPTEXT
+    --field-separator|-F FS
+			Use FS as the input field separator (as with AWK).
+    --unbuffered|-u	Immediately output each read line.
+    --non-numeric zero	Treat non-numeric values as 0 for comparison purposes.
+			This is the default.
+    --non-numeric keep	A comparison against a non-numeric value will always
+			succeed and the line will be kept.
+    --non-numeric drop	A comparison against a non-numeric value will always
+			fail and the line will be dropped.
+    [-]N -g|--greater|-s|--smaller|-lt|-le|-eq|-ne|-ge|-gt NUM
+			Only print those lines where the numeric value in field
+			N (-N counted from behind) compares to NUM. A single
+			successful comparison is enough to print a line (i.e. it
+			works like grep).
+
+SEE ALSO:
+- fieldMap is the generic underlying engine that can both filter and transform
+  fields.
+
+EXIT STATUS:
+    0	Complete success.
+    1	AWK processing error.
+    2	Bad invocation, wrong or missing command-line arguments.
+    3	Internal error or failed assertion.
+
+Example:
+HELPTEXT
+    printf 'ls -l / | %q %s\n' "$(basename "$1")" '2 -gt 1'
+}
+
+typeset -a comparisons=()
+storeComparison()
+{
+    local fieldNum="${1:?}"; shift
+    local value="${1:?}"; shift
+    local comparison="${1:?}"; shift
+    comparisons+=("if (comparisons[${fieldNum}][${value}] == \"\") { comparisons[${fieldNum}][${value}]=\"${comparison}\"; } else { printf(\"ERROR: Value %d already given in -%s comparison for field %d.\\n\", $value, comparisons[${fieldNum}][${value}], $fieldNum) > \"/dev/stderr\"; exit 2; }")
+}
+addComparison()
+{
+    local fieldNum="${1:?}"; shift
+    case "$1" in
+	--greater|-g)	    storeComparison "$fieldNum" "${2:?}" gt;;
+	--smaller|-s)	    storeComparison "$fieldNum" "${2:?}" lt;;
+	-@([gl][et]|eq|ne)) storeComparison "$fieldNum" "${2:?}" "${1#-}";;
+	*)		    { echo "ERROR: Unknown comparison operator \"$1\"!"; echo; printUsage "$0"; } >&2; exit 2;;
+    esac; shift
+}
+
+typeset -a fieldMapArgs=()
+while [ $# -ne 0 ]
+do
+    case "$1" in
+	--help|-h|-\?)	shift; printLongUsage "$0"; exit 0;;
+
+	-+([u]))	fieldMapArgs+=("$1"); shift;;
+	--@(unbuffered))
+			fieldMapArgs+=("$1"); shift;;
+	-[F])		fieldMapArgs+=("$1" "${2?}"); shift; shift;;
+	--@(field-separator))
+			fieldMapArgs+=("$1" "${2?}"); shift; shift;;
+	--non-numeric)	shift; fieldMapArgs+=(--assign "nonNumericMode=${1:?}"); shift;;
+	?(-)+([0-9]))	addComparison "$1" "${2:?}" "${3:?}"; shift; shift; shift;;
+	--)		shift; break;;
+	-*)		{ echo "ERROR: Unknown option \"$1\"!"; echo; printUsage "$0"; } >&2; exit 2;;
+	*)		break;;
+    esac
+done
+if [ ${#comparisons[@]} -eq 0 ]; then
+    echo 'ERROR: No comparison(s) passed.'
+    echo
+    printUsage "$0"
+    exit 2
+fi >&2
+
+IFS=$'\n'
+exec fieldMap "${fieldMapArgs[@]}" --function 'filterField(fieldValue, fieldComparisons,      isMatch, n, i, previousComparison, comparison, comparisonValue, isCurrentMatch, isOpen, isOpening) {
+    isMatch = 0
+    n = asorti(fieldComparisons, fieldComparisonsSortedValues, "@ind_num_asc")
+
+    # Check for equality first; if we have a match, we can directly accept the line.
+    # But more importantly, in the second loop, the intermingling of -eq and -ne would disrupt the opening/closing logic.
+    for (i = 1; i <= n; i++) {
+	comparison = fieldComparisons[fieldComparisonsSortedValues[i]]
+	comparisonValue = fieldComparisonsSortedValues[i]
+	if (comparison == "eq") {
+	    isCurrentMatch = (fieldValue == comparisonValue)
+	    if (index("," ENVIRON["DEBUG"] ",", ",fieldFilterNumber,")) print "**** #" fieldNr " (" i "): " fieldValue " -" comparison " (" previousComparison ") " comparisonValue > (ENVIRON["BATS_TEST_NAME"] ? "/dev/fd/3" : "/dev/stderr")
+	    if (index("," ENVIRON["DEBUG"] ",", ",fieldFilterNumber,")) print "****" (isCurrentMatch ? " accepted" : " not-matching") > (ENVIRON["BATS_TEST_NAME"] ? "/dev/fd/3" : "/dev/stderr")
+	    if (isCurrentMatch) return 1
+	}
+    }
+
+    for (i = 1; i <= n; i++) {
+	comparison = fieldComparisons[fieldComparisonsSortedValues[i]]
+	comparisonValue = fieldComparisonsSortedValues[i]
+	if (comparison == "eq") continue    # Already handled in the first loop above.
+
+	if (index("," ENVIRON["DEBUG"] ",", ",fieldFilterNumber,")) print "**** #" fieldNr " (" i "): " fieldValue " -" comparison " (" previousComparison ") " comparisonValue > (ENVIRON["BATS_TEST_NAME"] ? "/dev/fd/3" : "/dev/stderr")
+	switch (comparison) {
+	    case "gt": {
+		isOpening = 1
+		if (previousComparison == "gt" || previousComparison == "ge") continue # Already compared against a smaller value.
+		isCurrentMatch = (fieldValue > comparisonValue)
+		break
+	    }
+	    case "ge": {
+		isOpening = 1
+		if (previousComparison == "gt" || previousComparison == "ge") continue # Already compared against a smaller value.
+		isCurrentMatch = (fieldValue >= comparisonValue)
+		break
+	    }
+	    case "ne": {
+		isOpening = 1
+		isCurrentMatch = (fieldValue != comparisonValue)
+		break
+	    }
+
+	    case "lt": {
+		isOpening = 0
+		if (previousComparison == "lt" || previousComparison == "le") continue # Already compared against a smaller value.
+		isCurrentMatch = (fieldValue < comparisonValue)
+		break
+	    }
+	    case "le": {
+		isOpening = 0
+		if (previousComparison == "lt" || previousComparison == "le") continue # Already compared against a smaller value.
+		isCurrentMatch = (fieldValue <= comparisonValue)
+		break
+	    }
+
+	    default: {
+		exit(3)
+	    }
+	}
+	if (index("," ENVIRON["DEBUG"] ",", ",fieldFilterNumber,")) print "****" (isOpen ? " open  " : " closed") (isOpening ? " opening" : " closing") (isMatch ? "    match" : " no-match") (isCurrentMatch ? "     matching" : " not-matching") > (ENVIRON["BATS_TEST_NAME"] ? "/dev/fd/3" : "/dev/stderr")
+	if (isOpen) {
+	    # The last comparison was an opening one; following comparisons also need to
+	    # match until we encounter a closing one.
+	    isMatch = isMatch && isCurrentMatch
+	} else if (i > 1 && isMatch) {
+	    # We had a match and are not open; accept the line.
+	    if (index("," ENVIRON["DEBUG"] ",", ",fieldFilterNumber,")) print "**** accepted" > (ENVIRON["BATS_TEST_NAME"] ? "/dev/fd/3" : "/dev/stderr")
+	    return 1
+	} else {
+	    isMatch = isMatch || isCurrentMatch
+	}
+	isOpen = isOpening
+	previousComparison = comparison
+    }
+
+    if (index("," ENVIRON["DEBUG"] ",", ",fieldFilterNumber,")) print "****" (isMatch ? " accepted" : " declined") > (ENVIRON["BATS_TEST_NAME"] ? "/dev/fd/3" : "/dev/stderr")
+    return isMatch
+}
+function isNumber(x) {
+    return (x + 0 == x)
+}
+function fieldFilter(      fieldNr, fieldValue, isMatch) {
+    isMatch = 0
+    for (fieldNr in comparisons) {
+	fieldValue = $getFieldNr(fieldNr, NF)
+
+	if (! isNumber(fieldValue)) {
+	    switch (nonNumericMode) {
+		case "":
+		case "zero": fieldValue = 0; break
+		case "keep": return 1; break
+		case "drop": return 0; break
+		default: printf("ASSERT: Invalid nonNumericMode: %s\n", nonNumericMode) > "/dev/stderr"; exit 3
+	    }
+	}
+
+	isMatch = isMatch || filterField(fieldValue, comparisons[fieldNr])
+    }
+    return isMatch
+}
+BEGIN {
+'"${comparisons[*]}"'
+}
+' \
+    --filter 'fieldFilter()' "$@"

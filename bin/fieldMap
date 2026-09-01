@@ -1,5 +1,6 @@
 #!/bin/bash
 shopt -qs extglob
+${DEBUG:+eval $(debugtrace -o $- -- "$@")}
 
 printShortUsage()
 {
@@ -110,7 +111,7 @@ parseExpression()
 {
     local defaultSourceExpr="${1?}"; shift
     awkExpr="${1:?}"; shift
-    if [[ "$awkExpr" =~ ^([^|]*[^|+]|[^|+]?)(\+?)\|(.*)$ ]]; then
+    if [[ "$awkExpr" =~ ^([^|]*[^|+]|[^|+]?)(\+?)\|([^|].*)$ ]]; then
 	coprocs+=("${BASH_REMATCH[3]}")
 	[ "${BASH_REMATCH[2]}" = '+' ] && coprocsWantingPty+=("${BASH_REMATCH[3]}")
 	awkSourceExpr="${BASH_REMATCH[1]:-$defaultSourceExpr}"
@@ -182,8 +183,14 @@ if [ "$isInPlace" ]; then
     awkCall=(gawk -i inplace -v "INPLACE_SUFFIX=$inPlaceExtension" -v "inplace::suffix=$inPlaceExtension")
 fi
 
+${DEBUG:+debuglog --module functions "${awkFunctions[*]}"}
 IFS=$'\n'
-exec "${awkCall[@]}" "${awkArgs[@]}" \
+${DEBUG:+env
+DEBUGCOMMAND_IFS=newline
+debugcommand
+--module
+awk
+--} "${awkCall[@]}" "${awkArgs[@]}" \
     -v "outputSeparator=${outputSeparator//\\/\\\\}" \
     -v "isBuffered=$isBuffered" \
     -v "fieldList=${fields[*]//\\/\\\\}" \
