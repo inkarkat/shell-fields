@@ -6,7 +6,7 @@ printShortUsage()
     # Note: short followed by long option; if the user knows the short one, they can
     # skim the long one.
     local awkCompareExpr='[-]N -g|--greater|-s|--smaller|-lt|-le|-eq|-ne|-ge|-gt NUM ...'
-    printf 'Usage: cat FILE [...] | %q %s\n' "$(basename "$1")" "[-F|--field-separator FS] [-u|--unbuffered] ($awkCompareExpr) [...]"
+    printf 'Usage: cat FILE [...] | %q %s\n' "$(basename "$1")" "[-F|--field-separator FS] [-u|--unbuffered] [--non-numeric zero|keep|drop] ($awkCompareExpr) [...]"
     printf 'Usage: %q %s\n' "$(basename "$1")" "... [-i[SUFFIX]|--in-place[=SUFFIX]] ($awkCompareExpr) [...] [--] [FILE ...] [-?|-h|--help]"
 }
 printUsage()
@@ -30,6 +30,12 @@ HELPDESCRIPTION
     --field-separator|-F FS
 			Use FS as the input field separator (as with AWK).
     --unbuffered|-u	Immediately output each read line.
+    --non-numeric zero	Treat non-numeric values as 0 for comparison purposes.
+			This is the default.
+    --non-numeric keep	A comparison against a non-numeric value will always
+			succeed and the line will be kept.
+    --non-numeric drop	A comparison against a non-numeric value will always
+			fail and the line will be dropped.
     [-]N -g|--greater|-s|--smaller|-lt|-le|-eq|-ne|-ge|-gt NUM
 			Only print those lines where the numeric value in field
 			N (-N counted from behind) compares to NUM. A single
@@ -82,6 +88,7 @@ do
 	-[F])		fieldMapArgs+=("$1" "${2?}"); shift; shift;;
 	--@(field-separator))
 			fieldMapArgs+=("$1" "${2?}"); shift; shift;;
+	--non-numeric)	shift; fieldMapArgs+=(--assign "nonNumericMode=${1:?}"); shift;;
 	?(-)+([0-9]))	addComparison "$1" "${2:?}" "${3:?}"; shift; shift; shift;;
 	--)		shift; break;;
 	-*)		{ echo "ERROR: Unknown option \"$1\"!"; echo; printUsage "$0"; } >&2; exit 2;;
@@ -174,10 +181,25 @@ exec fieldMap "${fieldMapArgs[@]}" --function 'filterField(fieldValue, fieldComp
     if (index("," ENVIRON["DEBUG"] ",", ",fieldFilterNumber,")) print "****" (isMatch ? " accepted" : " declined") > (ENVIRON["BATS_TEST_NAME"] ? "/dev/fd/3" : "/dev/stderr")
     return isMatch
 }
-function fieldFilter(      fieldNr, isMatch) {
+function isNumber(x) {
+    return (x + 0 == x)
+}
+function fieldFilter(      fieldNr, fieldValue, isMatch) {
     isMatch = 0
     for (fieldNr in comparisons) {
-	isMatch = isMatch || filterField($getFieldNr(fieldNr, NF), comparisons[fieldNr])
+	fieldValue = $getFieldNr(fieldNr, NF)
+
+	if (! isNumber(fieldValue)) {
+	    switch (nonNumericMode) {
+		case "":
+		case "zero": fieldValue = 0; break
+		case "keep": return 1; break
+		case "drop": return 0; break
+		default: printf("ASSERT: Invalid nonNumericMode: %s\n", nonNumericMode) > "/dev/stderr"; exit 3
+	    }
+	}
+
+	isMatch = isMatch || filterField(fieldValue, comparisons[fieldNr])
     }
     return isMatch
 }
