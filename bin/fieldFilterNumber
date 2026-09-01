@@ -6,8 +6,8 @@ printShortUsage()
     # Note: short followed by long option; if the user knows the short one, they can
     # skim the long one.
     local awkCompareExpr='[-]N -g|--greater|-s|--smaller|-lt|-le|-eq|-ne|-ge|-gt NUM ...'
-    printf 'Usage: cat FILE [...] | %q %s\n' "$(basename "$1")" "[-F|--field-separator FS] [-u|--unbuffered] [--non-numeric zero|keep|drop] ($awkCompareExpr) [...]"
-    printf 'Usage: %q %s\n' "$(basename "$1")" "... [-i[SUFFIX]|--in-place[=SUFFIX]] ($awkCompareExpr) [...] [--] [FILE ...] [-?|-h|--help]"
+    printf 'Usage: cat FILE [...] | %q %s\n' "$(basename "$1")" "$(fieldMap --get-short-usage filter 2>/dev/null) [--non-numeric zero|keep|drop] ($awkCompareExpr) [...]"
+    printf 'Usage: %q %s\n' "$(basename "$1")" "... $(fieldMap --get-short-usage file 2>/dev/null) ($awkCompareExpr) [...] [--] FILE [...] [-?|-h|--help]"
 }
 printUsage()
 {
@@ -26,10 +26,8 @@ HELPDESCRIPTION
     echo
     printShortUsage "$1"
     echo
+    fieldMap --get-long-usage filter 2>/dev/null
     cat <<HELPTEXT
-    --field-separator|-F FS
-			Use FS as the input field separator (as with AWK).
-    --unbuffered|-u	Immediately output each read line.
     --non-numeric zero	Treat non-numeric values as 0 for comparison purposes.
 			This is the default.
     --non-numeric keep	A comparison against a non-numeric value will always
