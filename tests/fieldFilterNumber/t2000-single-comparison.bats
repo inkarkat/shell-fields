@@ -23,6 +23,7 @@ EOF
     assert_output - <<'EOF'
 bar	4711	1	5849	5.12
 baz	1111	2	9876	2.56
+xxx	42x	-	splunge	catch-22
 eof		0		-7.777
 EOF
 }
