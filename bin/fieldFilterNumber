@@ -96,7 +96,7 @@ if [ ${#comparisons[@]} -eq 0 ]; then
 fi >&2
 
 IFS=$'\n'
-exec fieldMap "${fieldMapArgs[@]}" --function 'filterField(fieldComparisons,      isMatch, n, i, previousComparison, comparison, value, isCurrentMatch, isOpen, isOpening) {
+exec fieldMap "${fieldMapArgs[@]}" --function 'filterField(fieldValue, fieldComparisons,      isMatch, n, i, previousComparison, comparison, comparisonValue, isCurrentMatch, isOpen, isOpening) {
     isMatch = 0
     n = asorti(fieldComparisons, fieldComparisonsSortedValues, "@ind_num_asc")
 
@@ -104,10 +104,10 @@ exec fieldMap "${fieldMapArgs[@]}" --function 'filterField(fieldComparisons,    
     # But more importantly, in the second loop, the intermingling of -eq and -ne would disrupt the opening/closing logic.
     for (i = 1; i <= n; i++) {
 	comparison = fieldComparisons[fieldComparisonsSortedValues[i]]
-	value = fieldComparisonsSortedValues[i]
+	comparisonValue = fieldComparisonsSortedValues[i]
 	if (comparison == "eq") {
-	    isCurrentMatch = ($getFieldNr(fieldNr, NF) == value)
-	    if (index("," ENVIRON["DEBUG"] ",", ",fieldFilterNumber,")) print "**** #" fieldNr " (" i "): " $getFieldNr(fieldNr, NF) " -" comparison " (" previousComparison ") " value > (ENVIRON["BATS_TEST_NAME"] ? "/dev/fd/3" : "/dev/stderr")
+	    isCurrentMatch = (fieldValue == comparisonValue)
+	    if (index("," ENVIRON["DEBUG"] ",", ",fieldFilterNumber,")) print "**** #" fieldNr " (" i "): " fieldValue " -" comparison " (" previousComparison ") " comparisonValue > (ENVIRON["BATS_TEST_NAME"] ? "/dev/fd/3" : "/dev/stderr")
 	    if (index("," ENVIRON["DEBUG"] ",", ",fieldFilterNumber,")) print "****" (isCurrentMatch ? " accepted" : " not-matching") > (ENVIRON["BATS_TEST_NAME"] ? "/dev/fd/3" : "/dev/stderr")
 	    if (isCurrentMatch) return 1
 	}
@@ -115,39 +115,39 @@ exec fieldMap "${fieldMapArgs[@]}" --function 'filterField(fieldComparisons,    
 
     for (i = 1; i <= n; i++) {
 	comparison = fieldComparisons[fieldComparisonsSortedValues[i]]
-	value = fieldComparisonsSortedValues[i]
+	comparisonValue = fieldComparisonsSortedValues[i]
 	if (comparison == "eq") continue    # Already handled in the first loop above.
 
-	if (index("," ENVIRON["DEBUG"] ",", ",fieldFilterNumber,")) print "**** #" fieldNr " (" i "): " $getFieldNr(fieldNr, NF) " -" comparison " (" previousComparison ") " value > (ENVIRON["BATS_TEST_NAME"] ? "/dev/fd/3" : "/dev/stderr")
+	if (index("," ENVIRON["DEBUG"] ",", ",fieldFilterNumber,")) print "**** #" fieldNr " (" i "): " fieldValue " -" comparison " (" previousComparison ") " comparisonValue > (ENVIRON["BATS_TEST_NAME"] ? "/dev/fd/3" : "/dev/stderr")
 	switch (comparison) {
 	    case "gt": {
 		isOpening = 1
 		if (previousComparison == "gt" || previousComparison == "ge") continue # Already compared against a smaller value.
-		isCurrentMatch = ($getFieldNr(fieldNr, NF) > value)
+		isCurrentMatch = (fieldValue > comparisonValue)
 		break
 	    }
 	    case "ge": {
 		isOpening = 1
 		if (previousComparison == "gt" || previousComparison == "ge") continue # Already compared against a smaller value.
-		isCurrentMatch = ($getFieldNr(fieldNr, NF) >= value)
+		isCurrentMatch = (fieldValue >= comparisonValue)
 		break
 	    }
 	    case "ne": {
 		isOpening = 1
-		isCurrentMatch = ($getFieldNr(fieldNr, NF) != value)
+		isCurrentMatch = (fieldValue != comparisonValue)
 		break
 	    }
 
 	    case "lt": {
 		isOpening = 0
 		if (previousComparison == "lt" || previousComparison == "le") continue # Already compared against a smaller value.
-		isCurrentMatch = ($getFieldNr(fieldNr, NF) < value)
+		isCurrentMatch = (fieldValue < comparisonValue)
 		break
 	    }
 	    case "le": {
 		isOpening = 0
 		if (previousComparison == "lt" || previousComparison == "le") continue # Already compared against a smaller value.
-		isCurrentMatch = ($getFieldNr(fieldNr, NF) <= value)
+		isCurrentMatch = (fieldValue <= comparisonValue)
 		break
 	    }
 
@@ -174,10 +174,10 @@ exec fieldMap "${fieldMapArgs[@]}" --function 'filterField(fieldComparisons,    
     if (index("," ENVIRON["DEBUG"] ",", ",fieldFilterNumber,")) print "****" (isMatch ? " accepted" : " declined") > (ENVIRON["BATS_TEST_NAME"] ? "/dev/fd/3" : "/dev/stderr")
     return isMatch
 }
-function fieldFilter(      isMatch) {
+function fieldFilter(      fieldNr, isMatch) {
     isMatch = 0
     for (fieldNr in comparisons) {
-	isMatch = isMatch || filterField(comparisons[fieldNr])
+	isMatch = isMatch || filterField($getFieldNr(fieldNr, NF), comparisons[fieldNr])
     }
     return isMatch
 }
