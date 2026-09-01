@@ -2,15 +2,144 @@
 shopt -qs extglob
 ${DEBUG:+eval $(debugtrace -o $- -- "$@")}
 
+getShortUsage()
+{
+    local usageSep
+    [ $# -gt 0 ] || set -- ''
+    while [ $# -gt 0 ]
+    do
+	local hadTopic=
+	case "$1" in
+	    ''|map)
+		printf %s "${usageSep}${hadTopic:+ }" '[-F|--field-separator FS] [-s|--output-separator OS] [-u|--unbuffered]'; hadTopic=t;;&
+	    filter)
+		printf %s "${usageSep}${hadTopic:+ }" '[-F|--field-separator FS] [-u|--unbuffered]'; hadTopic=t;;&
+	    ''|coproc)
+		printf %s "${usageSep}${hadTopic:+ }" '[-E|--coprocess-error abort|ignore [--coprocess-error-value TEXT]|restart]'; hadTopic=t;;&
+	    ''|programming)
+		printf %s "${usageSep}${hadTopic:+ }" "[-v|--assign var=val [-v ...]] [-f|--function 'FUNCTION-NAME(PARAMETER-LIST) { ... }' [-f ...]]"; hadTopic=t;;&
+	    ''|map-expr)
+		local awkExpr='(AWK-EXPR | "[AWK-EXPR][+]|COMMAND")'
+		local awkFilterOrFieldAndExpr="-x|--filter $awkExpr | [--reparse] [+-]N $awkExpr"
+		printf %s "${usageSep}${hadTopic:+ }" "($awkFilterOrFieldAndExpr) [...]"; hadTopic=t;;&
+	    file)
+		printf %s "${usageSep}${hadTopic:+ }" '[-i[SUFFIX]|--in-place[=SUFFIX]]'; hadTopic=t;;&
+	    *)  [ "$hadTopic" ] || { echo "ERROR: Unknown short usage topic \"$1\"!" >&2; return 2; };;
+	esac
+	shift; usageSep=' '
+    done
+}
+getLongUsage()
+{
+    [ $# -gt 0 ] || set -- ''
+    while [ $# -gt 0 ]
+    do
+	local topic="$1"; shift
+	local hadTopic=
+	case "$topic" in
+	    ''|map|filter)
+		cat <<HELPTEXT
+    --field-separator|-F FS
+			Use FS as the input field separator (as with AWK).
+HELPTEXT
+		[ "$topic" = filter ] || cat <<HELPTEXT
+    --output-separator|-s OS
+			Use OUTPUT-SEPARATOR (instead of FIELD-SEPARATOR or the
+			default space) to join the fields.
+HELPTEXT
+		cat <<HELPTEXT
+    --unbuffered|-u	Immediately output each read line.
+HELPTEXT
+		hadTopic=t
+		;;&
+	    ''|coproc)
+		cat <<HELPTEXT
+    --coprocess-error|-E abort
+			When COMMAND fails, abort the entire processing of
+			FILE(s). This is the default behavior.
+    --coprocess-error|-E ignore
+			When COMMAND fails, do not restart it; following mapped
+			fields will be empty.
+    --coprocess-error-value TEXT
+			When COMMAND fails (and processing isn't aborted), use
+			TEXT for the mapped field.
+    --coprocess-error|-E restart
+			When COMMAND fails, the field will be empty / contain
+			TEXT, but relaunch the COMMAND for the following field,
+			and try to resume processing.
+HELPTEXT
+		hadTopic=t
+		;;&
+	    ''|programming)
+		cat <<HELPTEXT
+    --assign|-v var=val	Assign the value val to the variable var; these can then
+			be used in AWK-EXPR.
+    --function|-f 'FUNCTION-NAME(PARAMETER-LIST) { STATEMENTS ... }'
+			Define an AWK function FUNCTION-NAME with PARAMETER-LIST
+			and STATEMENTS (for use in AWK-EXPR; when a simple
+			expression won't do).
+HELPTEXT
+		hadTopic=t
+		;;&
+	    ''|map-expr)
+		cat <<HELPTEXT
+    --reparse		Split the (partially) mapped line again into fields, and
+			apply following expressions to the new field list. By
+			default, +/-N addressing from behind refers to the
+			original field count, and a field that has been split
+			into multiple fields through mapping to a string
+			containing FS is still considered one field; with
+			--reparse, the field count is updated, and a mapped
+			field that contains FS is split into multiple fields.
+			Attention: This may cause already processed mappings of
+			field N to be reapplied to the new field N!
+    AWK-EXPR		Any valid expression in AWK, for example 42,
+			'"foo"', '++\$fieldNr' (fieldNr refers to N), or
+			'\$1 "(" length(\$1) ")"')
+    "|COMMAND"		Start COMMAND as a coprocess. The original contents of
+			the target field are written to COMMAND's standard
+			input, and one resulting line is read back and replaces
+			the field's contents. So command must respond with one
+			output line for each input line, without buffering.
+    "AWK-EXPR|COMMAND"	Start COMMAND as a coprocess. For each target field, the
+			AWK-EXPR is written to COMMAND's standard input, and one
+			resulting line is read back and replaces the field's
+			contents.
+			So whereas |COMMAND transforms a particular field, this
+			form allows to synthesize a field from other fields.
+    "[AWK-EXPR]+|COMMAND"
+			Start COMMAND as a coprocess in a pseudo-tty instead of
+			using pipes. This typically fools the standard library
+			into line buffering, and unblocks a hanging invocation.
+			It is more efficient and robust to force line buffering
+			via a command-line argument (e.g. sed --unbuffered), or
+			through a command like stdbuf.
+    --filter|-x (AWK-EXPR | "[AWK-EXPR][+]|COMMAND")
+			Evaluate like a field mapping (but fieldNr is not
+			defined) and drop the entire line if the result is a
+			falsy value.
+HELPTEXT
+		hadTopic=t
+		;;&
+	    ''|file)
+		cat <<HELPTEXT
+    --in-place[=SUFFIX]|-i[SUFFIX]
+			Edit FILE(s) in place (makes backup if SUFFIX supplied).
+HELPTEXT
+		hadTopic=t
+		;;&
+	    *)  [ "$hadTopic" ] || { echo "ERROR: Unknown long usage topic \"$topic\"!" >&2; return 2; };;
+	esac
+    done
+}
+
 printShortUsage()
 {
-    local awkExpr='(AWK-EXPR | "[AWK-EXPR][+]|COMMAND")'
-    local awkFilterOrFieldAndExpr="-x|--filter $awkExpr | [--reparse] [+-]N $awkExpr"
     # Note: short followed by long option; if the user knows the short one, she can
     # skim the long one.
-    printf 'Usage: cat FILE [...] | %q %s\n' "$(basename "$1")" "[-F|--field-separator FS] [-s|--output-separator OS] [-v|--assign var=val [-v ...]] [-u|--unbuffered] [-E|--coprocess-error abort|ignore [--coprocess-error-value TEXT]|restart] [-f|--function 'FUNCTION-NAME(PARAMETER-LIST) { ... }' [-f ...]] ($awkFilterOrFieldAndExpr) [...]"
+    printf 'Usage: cat FILE [...] | %q %s\n' "$(basename "$1")" "$(getShortUsage '')"
     echo
-    printf 'Usage: %q %s\n' "$(basename "$1")" "... [-i[SUFFIX]|--in-place[=SUFFIX]] ($awkFilterOrFieldAndExpr) [...] [--] [FILE ...] [-?|-h|--help]"
+    printf 'Usage: %q %s\n' "$(basename "$1")" "... $(getShortUsage file map-expr) [--] FILE [...] [-?|-h|--help]"
 }
 printUsage()
 {
@@ -31,71 +160,8 @@ HELPDESCRIPTION
     echo
     printShortUsage "$1"
     echo
+    getLongUsage ''
     cat <<HELPTEXT
-    --reparse		    Split the (partially) mapped line again into fields,
-			    and apply following expressions to the new field
-			    list. By default, +/-N addressing from behind refers
-			    to the original field count, and a field that has
-			    been split into multiple fields through mapping to a
-			    string containing FS is still considered one field;
-			    with --reparse, the field count is updated, and a
-			    mapped field that contains FS is split into multiple
-			    fields. Attention: This may cause already processed
-			    mappings of field N to be reapplied to the new field
-			    N!
-    AWK-EXPR		    Any valid expression in AWK, for example 42,
-			    '"foo"', '++\$fieldNr' (fieldNr refers to N), or
-			    '\$1 "(" length(\$1) ")"')
-    "|COMMAND"		    Start COMMAND as a coprocess. The original contents
-			    of the target field are written to COMMAND's
-			    standard input, and one resulting line is read back
-			    and replaces the field's contents. So command must
-			    respond with one output line for each input line,
-			    without buffering.
-    "AWK-EXPR|COMMAND"	    Start COMMAND as a coprocess. For each target field,
-			    the AWK-EXPR is written to COMMAND's standard input,
-			    and one resulting line is read back and replaces
-			    the field's contents.
-			    So whereas |COMMAND transforms a particular field,
-			    this form allows to synthesize a field from other
-			    fields.
-    "[AWK-EXPR]+|COMMAND"   Start COMMAND as a coprocess in a pseudo-tty instead
-			    of using pipes. This typically fools the standard
-			    library into line buffering, and unblocks a hanging
-			    invocation. It is more efficient and robust to force
-			    line buffering via a command-line argument (e.g.
-			    sed --unbuffered), or through a command like stdbuf.
-    --field-separator|-F FS Use FS as the input field separator (as with AWK).
-    --output-separator|-s OS
-			    Use OUTPUT-SEPARATOR (instead of FIELD-SEPARATOR or
-			    the default space) to join the fields.
-    --assign|-v var=val	    Assign the value val to the variable var; these can
-			    then be used in AWK-EXPR.
-    --unbuffered|-u	    Immediately output each read line.
-    --coprocess-error|-E abort
-			    When COMMAND fails, abort the entire processing of
-			    FILE(s). This is the default behavior.
-    --coprocess-error|-E ignore
-			    When COMMAND fails, do not restart it; following
-			    mapped fields will be empty.
-    --coprocess-error-value TEXT
-			    When COMMAND fails (and processing isn't aborted),
-			    use TEXT for the mapped field.
-    --coprocess-error|-E restart
-			    When COMMAND fails, the field will be empty /
-			    contain TEXT, but relaunch the COMMAND for the
-			    following field, and try to resume processing.
-    --function|-f 'FUNCTION-NAME(PARAMETER-LIST) { STATEMENTS ... }'
-			    Define an AWK function FUNCTION-NAME with
-			    PARAMETER-LIST and STATEMENTS (for use in AWK-EXPR;
-			    when a simple expression won't do).
-    --filter|-x (AWK-EXPR | "[AWK-EXPR][+]|COMMAND")
-			    Evaluate like a field mapping (but fieldNr is not
-			    defined) and drop the entire line if the result is a
-			    falsy value.
-    --in-place[=SUFFIX]|-i[SUFFIX]
-			    Edit FILE(s) in place (makes backup if SUFFIX
-			    supplied).
 EXIT STATUS:
     0	Complete success.
     1	AWK processing error.
@@ -137,7 +203,12 @@ inPlaceExtension=
 while [ $# -ne 0 ]
 do
     case "$1" in
-	--help|-h|-\?)		shift; printLongUsage "$0"; exit 0;;
+	--help|-h|-\?)	shift; printLongUsage "$0"; exit 0;;
+	--get-short-usage)
+			shift; getShortUsage "$@"; exit $?;;
+	--get-long-usage)
+			shift; getLongUsage "$@"; exit $?;;
+
 	--field-separator|-F)	awkArgs+=("$1" "$2"); shift; shift;;
 	--output-separator|-s)	shift; outputSeparator="${1?}"; shift;;
 	--assign|-v)		awkVariableAssignments+=("$1" "${2?}"); shift; shift;;
