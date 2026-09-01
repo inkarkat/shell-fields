@@ -1,13 +1,83 @@
 #!/bin/bash
 shopt -qs extglob
 
+getShortUsage()
+{
+    local compareOp='-g|--greater|-s|--smaller|-lt|-le|-eq|-ne|-ge|-gt NUM'
+    local usageSep
+    [ $# -gt 0 ] || set -- ''
+    while [ $# -gt 0 ]
+    do
+	local hadTopic=
+	case "$1" in
+	    ''|filter)
+		fieldMap --get-short-usage filter; hadTopic=t;;&
+	    ''|config)
+		printf %s "${usageSep}${hadTopic:+ }" '[--non-numeric zero|keep|drop]'; hadTopic=t;;&
+	    compare-op)
+		printf %s "${usageSep}${hadTopic:+ }" "$compareOp"; hadTopic=t;;&
+	    ''|compare-expr)
+		printf %s "${usageSep}${hadTopic:+ }" "([-]N $compareOp) [...]"; hadTopic=t;;&
+	    file)
+		fieldMap --get-short-usage file; hadTopic=t;;&
+	    *)  [ "$hadTopic" ] || { echo "ERROR: Unknown short usage topic \"$1\"!" >&2; return 2; };;
+	esac
+	shift; usageSep=' '
+    done
+}
+getLongUsage()
+{
+    [ $# -gt 0 ] || set -- ''
+    while [ $# -gt 0 ]
+    do
+	local topic="$1"; shift
+	local hadTopic=
+	case "$topic" in
+	    ''|filter)
+		fieldMap --get-long-usage filter
+		hadTopic=t
+		;;&
+	    ''|config)
+		cat <<HELPTEXT
+    --non-numeric zero	Treat non-numeric values as 0 for comparison purposes.
+			This is the default.
+    --non-numeric keep	A comparison against a non-numeric value will always
+			succeed and the line will be kept.
+    --non-numeric drop	A comparison against a non-numeric value will always
+			fail and the line will be dropped.
+HELPTEXT
+		hadTopic=t
+		;;&
+	    compare-op)
+		local action="${1?}"; shift
+		cat <<HELPTEXT
+    -g|--greater|-s|--smaller|-lt|-le|-eq|-ne|-ge|-gt NUM
+			Only ${action:-print those lines where the numeric value}
+			compares successfully to NUM. A single successful
+			comparison is enough (i.e. it works like grep).
+HELPTEXT
+		hadTopic=t
+		;;&
+	    ''|compare-expr)
+		cat <<HELPTEXT
+    [-]N -g|--greater|-s|--smaller|-lt|-le|-eq|-ne|-ge|-gt NUM
+			Only print those lines where the numeric value in field
+			N (-N counted from behind) compares to NUM. A single
+			successful comparison is enough to print a line (i.e. it
+			works like grep).
+HELPTEXT
+		hadTopic=t
+		;;&
+	    *)  [ "$hadTopic" ] || { echo "ERROR: Unknown long usage topic \"$topic\"!" >&2; return 2; };;
+	esac
+    done
+}
 printShortUsage()
 {
     # Note: short followed by long option; if the user knows the short one, they can
     # skim the long one.
-    local awkCompareExpr='[-]N -g|--greater|-s|--smaller|-lt|-le|-eq|-ne|-ge|-gt NUM ...'
-    printf 'Usage: cat FILE [...] | %q %s\n' "$(basename "$1")" "$(fieldMap --get-short-usage filter 2>/dev/null) [--non-numeric zero|keep|drop] ($awkCompareExpr) [...]"
-    printf 'Usage: %q %s\n' "$(basename "$1")" "... $(fieldMap --get-short-usage file 2>/dev/null) ($awkCompareExpr) [...] [--] FILE [...] [-?|-h|--help]"
+    printf 'Usage: cat FILE [...] | %q %s\n' "$(basename "$1")" "$(getShortUsage '')"
+    printf 'Usage: %q %s\n' "$(basename "$1")" "... $(getShortUsage file) $(getShortUsage compare-expr) [--] FILE [...] [-?|-h|--help]"
 }
 printUsage()
 {
@@ -26,20 +96,8 @@ HELPDESCRIPTION
     echo
     printShortUsage "$1"
     echo
-    fieldMap --get-long-usage filter 2>/dev/null
+    getLongUsage ''
     cat <<HELPTEXT
-    --non-numeric zero	Treat non-numeric values as 0 for comparison purposes.
-			This is the default.
-    --non-numeric keep	A comparison against a non-numeric value will always
-			succeed and the line will be kept.
-    --non-numeric drop	A comparison against a non-numeric value will always
-			fail and the line will be dropped.
-    [-]N -g|--greater|-s|--smaller|-lt|-le|-eq|-ne|-ge|-gt NUM
-			Only print those lines where the numeric value in field
-			N (-N counted from behind) compares to NUM. A single
-			successful comparison is enough to print a line (i.e. it
-			works like grep).
-
 SEE ALSO:
 - fieldMap is the generic underlying engine that can both filter and transform
   fields.
@@ -79,6 +137,10 @@ while [ $# -ne 0 ]
 do
     case "$1" in
 	--help|-h|-\?)	shift; printLongUsage "$0"; exit 0;;
+	--get-short-usage)
+			shift; getShortUsage "$@"; exit $?;;
+	--get-long-usage)
+			shift; getLongUsage "$@"; exit $?;;
 
 	-+([u]))	fieldMapArgs+=("$1"); shift;;
 	--@(unbuffered))
