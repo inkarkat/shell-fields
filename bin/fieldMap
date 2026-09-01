@@ -2,36 +2,86 @@
 shopt -qs extglob
 ${DEBUG:+eval $(debugtrace -o $- -- "$@")}
 
-printShortUsage()
+getShortUsage()
 {
-    local awkExpr='(AWK-EXPR | "[AWK-EXPR][+]|COMMAND")'
-    local awkFilterOrFieldAndExpr="-x|--filter $awkExpr | [--reparse] [+-]N $awkExpr"
-    # Note: short followed by long option; if the user knows the short one, she can
-    # skim the long one.
-    printf 'Usage: cat FILE [...] | %q %s\n' "$(basename "$1")" "[-F|--field-separator FS] [-s|--output-separator OS] [-u|--unbuffered] [-E|--coprocess-error abort|ignore [--coprocess-error-value TEXT]|restart] [-v|--assign var=val [-v ...]] [-f|--function 'FUNCTION-NAME(PARAMETER-LIST) { ... }' [-f ...]] ($awkFilterOrFieldAndExpr) [...]"
-    echo
-    printf 'Usage: %q %s\n' "$(basename "$1")" "... [-i[SUFFIX]|--in-place[=SUFFIX]] ($awkFilterOrFieldAndExpr) [...] [--] [FILE ...] [-?|-h|--help]"
+    local usageSep
+    [ $# -gt 0 ] || set -- ''
+    while [ $# -gt 0 ]
+    do
+	local hadTopic=
+	case "$1" in
+	    ''|map)
+		printf %s "${usageSep}${hadTopic:+ }" '[-F|--field-separator FS] [-s|--output-separator OS] [-u|--unbuffered]'; hadTopic=t;;&
+	    filter)
+		printf %s "${usageSep}${hadTopic:+ }" '[-F|--field-separator FS] [-u|--unbuffered]'; hadTopic=t;;&
+	    ''|coproc)
+		printf %s "${usageSep}${hadTopic:+ }" '[-E|--coprocess-error abort|ignore [--coprocess-error-value TEXT]|restart]'; hadTopic=t;;&
+	    ''|programming)
+		printf %s "${usageSep}${hadTopic:+ }" "[-v|--assign var=val [-v ...]] [-f|--function 'FUNCTION-NAME(PARAMETER-LIST) { ... }' [-f ...]]"; hadTopic=t;;&
+	    ''|map-expr)
+		local awkExpr='(AWK-EXPR | "[AWK-EXPR][+]|COMMAND")'
+		local awkFilterOrFieldAndExpr="-x|--filter $awkExpr | [--reparse] [+-]N $awkExpr"
+		printf %s "${usageSep}${hadTopic:+ }" "($awkFilterOrFieldAndExpr) [...]"; hadTopic=t;;&
+	    file)
+		printf %s "${usageSep}${hadTopic:+ }" '[-i[SUFFIX]|--in-place[=SUFFIX]]'; hadTopic=t;;&
+	    *)  [ "$hadTopic" ] || { echo "ERROR: Unknown short usage topic \"$1\"!" >&2; return 2; };;
+	esac
+	shift; usageSep=' '
+    done
 }
-printUsage()
+getLongUsage()
 {
-    # This is the short help when launched with no or incorrect arguments.
-    # It is printed to stderr to avoid accidental processing.
-    printShortUsage "$1" >&2
-    printf >&2 '\nTry %q --help for more information.\n' "$(basename "$1")"
-}
-printLongUsage()
-{
-    # This is the long "man page" when launched with the help argument.
-    # It is printed to stdout to allow paging with 'more'.
-    cat <<HELPDESCRIPTION
-Transform a field N (+/-N counted from behind) with AWK-EXPR. Application
-happens in argument order from left to right; when multiple expressions target
-the same field, each is applied once.
-HELPDESCRIPTION
-    echo
-    printShortUsage "$1"
-    echo
-    cat <<HELPTEXT
+    [ $# -gt 0 ] || set -- ''
+    while [ $# -gt 0 ]
+    do
+	local topic="$1"; shift
+	local hadTopic=
+	case "$topic" in
+	    ''|map|filter)
+		cat <<HELPTEXT
+    --field-separator|-F FS Use FS as the input field separator (as with AWK).
+HELPTEXT
+		[ "$topic" = filter ] || cat <<HELPTEXT
+    --output-separator|-s OS
+			    Use OUTPUT-SEPARATOR (instead of FIELD-SEPARATOR or
+			    the default space) to join the fields.
+HELPTEXT
+		cat <<HELPTEXT
+    --unbuffered|-u	    Immediately output each read line.
+HELPTEXT
+		hadTopic=t
+		;;&
+	    ''|coproc)
+		cat <<HELPTEXT
+    --coprocess-error|-E abort
+			    When COMMAND fails, abort the entire processing of
+			    FILE(s). This is the default behavior.
+    --coprocess-error|-E ignore
+			    When COMMAND fails, do not restart it; following
+			    mapped fields will be empty.
+    --coprocess-error-value TEXT
+			    When COMMAND fails (and processing isn't aborted),
+			    use TEXT for the mapped field.
+    --coprocess-error|-E restart
+			    When COMMAND fails, the field will be empty /
+			    contain TEXT, but relaunch the COMMAND for the
+			    following field, and try to resume processing.
+HELPTEXT
+		hadTopic=t
+		;;&
+	    ''|programming)
+		cat <<HELPTEXT
+    --assign|-v var=val	    Assign the value val to the variable var; these can
+			    then be used in AWK-EXPR.
+    --function|-f 'FUNCTION-NAME(PARAMETER-LIST) { STATEMENTS ... }'
+			    Define an AWK function FUNCTION-NAME with
+			    PARAMETER-LIST and STATEMENTS (for use in AWK-EXPR;
+			    when a simple expression won't do).
+HELPTEXT
+		hadTopic=t
+		;;&
+	    ''|map-expr)
+		cat <<HELPTEXT
     --reparse		    Split the (partially) mapped line again into fields,
 			    and apply following expressions to the new field
 			    list. By default, +/-N addressing from behind refers
@@ -69,33 +119,51 @@ HELPDESCRIPTION
 			    Evaluate like a field mapping (but fieldNr is not
 			    defined) and drop the entire line if the result is a
 			    falsy value.
-    --field-separator|-F FS Use FS as the input field separator (as with AWK).
-    --output-separator|-s OS
-			    Use OUTPUT-SEPARATOR (instead of FIELD-SEPARATOR or
-			    the default space) to join the fields.
-    --unbuffered|-u	    Immediately output each read line.
+HELPTEXT
+		hadTopic=t
+		;;&
+	    ''|file)
+		cat <<HELPTEXT
     --in-place[=SUFFIX]|-i[SUFFIX]
 			    Edit FILE(s) in place (makes backup if SUFFIX
 			    supplied).
-    --coprocess-error|-E abort
-			    When COMMAND fails, abort the entire processing of
-			    FILE(s). This is the default behavior.
-    --coprocess-error|-E ignore
-			    When COMMAND fails, do not restart it; following
-			    mapped fields will be empty.
-    --coprocess-error-value TEXT
-			    When COMMAND fails (and processing isn't aborted),
-			    use TEXT for the mapped field.
-    --coprocess-error|-E restart
-			    When COMMAND fails, the field will be empty /
-			    contain TEXT, but relaunch the COMMAND for the
-			    following field, and try to resume processing.
-    --assign|-v var=val	    Assign the value val to the variable var; these can
-			    then be used in AWK-EXPR.
-    --function|-f 'FUNCTION-NAME(PARAMETER-LIST) { STATEMENTS ... }'
-			    Define an AWK function FUNCTION-NAME with
-			    PARAMETER-LIST and STATEMENTS (for use in AWK-EXPR;
-			    when a simple expression won't do).
+HELPTEXT
+		hadTopic=t
+		;;&
+	    *)  [ "$hadTopic" ] || { echo "ERROR: Unknown long usage topic \"$topic\"!" >&2; return 2; };;
+	esac
+    done
+}
+
+printShortUsage()
+{
+    # Note: short followed by long option; if the user knows the short one, she can
+    # skim the long one.
+    printf 'Usage: cat FILE [...] | %q %s\n' "$(basename "$1")" "$(getShortUsage '')"
+    echo
+    printf 'Usage: %q %s\n' "$(basename "$1")" "... $(getShortUsage file map-expr) [--] FILE [...] [-?|-h|--help]"
+}
+printUsage()
+{
+    # This is the short help when launched with no or incorrect arguments.
+    # It is printed to stderr to avoid accidental processing.
+    printShortUsage "$1" >&2
+    printf >&2 '\nTry %q --help for more information.\n' "$(basename "$1")"
+}
+printLongUsage()
+{
+    # This is the long "man page" when launched with the help argument.
+    # It is printed to stdout to allow paging with 'more'.
+    cat <<HELPDESCRIPTION
+Transform a field N (+/-N counted from behind) with AWK-EXPR. Application
+happens in argument order from left to right; when multiple expressions target
+the same field, each is applied once.
+HELPDESCRIPTION
+    echo
+    printShortUsage "$1"
+    echo
+    getLongUsage ''
+    cat <<HELPTEXT
 EXIT STATUS:
     0	Complete success.
     1	AWK processing error.
@@ -137,7 +205,12 @@ inPlaceExtension=
 while [ $# -ne 0 ]
 do
     case "$1" in
-	--help|-h|-\?)		shift; printLongUsage "$0"; exit 0;;
+	--help|-h|-\?)	shift; printLongUsage "$0"; exit 0;;
+	--get-short-usage)
+			shift; getShortUsage "$@"; exit $?;;
+	--get-long-usage)
+			shift; getLongUsage "$@"; exit $?;;
+
 	--field-separator|-F)	awkArgs+=("$1" "$2"); shift; shift;;
 	--output-separator|-s)	shift; outputSeparator="${1?}"; shift;;
 	--assign|-v)		awkVariableAssignments+=("$1" "${2?}"); shift; shift;;
