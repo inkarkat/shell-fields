@@ -206,7 +206,7 @@ exec fieldMap "${fieldMapArgs[@]}" --function 'filterField(fieldValue, fieldComp
     # But more importantly, in the second loop, the intermingling of -eq and -ne would disrupt the opening/closing logic.
     for (i = 1; i <= n; i++) {
 	comparison = fieldComparisons[fieldComparisonsSortedValues[i]]
-	comparisonValue = fieldComparisonsSortedValues[i]
+	comparisonValue = 0 + fieldComparisonsSortedValues[i]
 	if (comparison == "eq") {
 	    isCurrentMatch = (fieldValue == comparisonValue)
 	    if (index("," ENVIRON["DEBUG"] ",", ",fieldFilterNumber,")) print "**** #" fieldNr " (" i "): " fieldValue " -" comparison " (" previousComparison ") " comparisonValue > (ENVIRON["BATS_TEST_NAME"] ? "/dev/fd/3" : "/dev/stderr")
@@ -217,7 +217,7 @@ exec fieldMap "${fieldMapArgs[@]}" --function 'filterField(fieldValue, fieldComp
 
     for (i = 1; i <= n; i++) {
 	comparison = fieldComparisons[fieldComparisonsSortedValues[i]]
-	comparisonValue = fieldComparisonsSortedValues[i]
+	comparisonValue = 0 + fieldComparisonsSortedValues[i]
 	if (comparison == "eq") continue    # Already handled in the first loop above.
 
 	if (index("," ENVIRON["DEBUG"] ",", ",fieldFilterNumber,")) print "**** #" fieldNr " (" i "): " fieldValue " -" comparison " (" previousComparison ") " comparisonValue > (ENVIRON["BATS_TEST_NAME"] ? "/dev/fd/3" : "/dev/stderr")
@@ -294,7 +294,7 @@ function fieldFilter(      fieldNr, fieldValue, isMatch) {
 	    }
 	}
 
-	isMatch = isMatch || filterField(fieldValue, comparisons[fieldNr])
+	isMatch = isMatch || filterField(0 + fieldValue, comparisons[fieldNr])
     }
     return isMatch
 }
