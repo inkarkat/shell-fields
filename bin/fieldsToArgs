@@ -77,6 +77,7 @@ progressSink=
 with=
 errorRedir='2>&1'
 typeset -a colorArg=()
+isSingleSuccess=
 additionalSuccessStatus=
 betweenCommand=
 typeset -a runWithPromptArgs=()
@@ -104,6 +105,8 @@ do
 	--between-command)
 			shift; betweenCommand="$1"; shift;;
 
+	--single-success)
+			runWithPromptArgs+=("$1"); shift; isSingleSuccess=t;;
 	--status-99-is-noop)
 			runWithPromptArgs+=("$1"); shift; additionalSuccessStatus=99;;
 	--)		shift; break;;
@@ -235,6 +238,7 @@ case "$with" in
 	fi
 
 	status=
+	singleSuccessStatus=
 	: ${FIELDSTOARGS_HEADER_ID:="fieldsToArgs-$$-$RANDOM"}
 	exec 3<&0
 	while IFS=$'\n' read -r argCnt
@@ -252,12 +256,14 @@ case "$with" in
 	    [ -z "$header" ] || reportProgress "$header"
 
 	    (eval "${isHeader:+{}" "$interpolatedCommands" "${isHeader:+; \} $errorRedir | withHeader "${colorArg[@]}" --id '$FIELDSTOARGS_HEADER_ID' -- '${header:-(empty)}'}") <&3; exitStatus=$?
-	    if [ $exitStatus -gt ${status:--1} -a $exitStatus -ne ${additionalSuccessStatus:--1} ]; then
+	    if [ $exitStatus -eq 0 ] && [ "$isSingleSuccess" ]; then
+		singleSuccessStatus=0
+	    elif [ $exitStatus -gt ${status:--1} -a $exitStatus -ne ${additionalSuccessStatus:--1} ]; then
 		status=$exitStatus
 	    fi
 	    isFirst=
 	done < <(parseFields)
-	exit ${status:-${additionalSuccessStatus:-0}}
+	exit ${singleSuccessStatus:-${status:-${additionalSuccessStatus:-0}}}
 	;;
     *)	printf >&2 'ASSERT: Invalid strategy: %s\n' "$with"; exit 3;;
 esac
